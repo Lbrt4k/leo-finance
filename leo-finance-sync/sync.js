@@ -331,7 +331,6 @@ async function syncKlaviyo(cfg, dateStr) {
         measurements: ['sum_value'],
         filter:       `greater-or-equal(datetime,${start}),less-than(datetime,${end})`,
         by:           ['$attributed_channel'],
-        sort:         '-datetime',
       },
     },
   });
@@ -370,7 +369,6 @@ async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
         measurements: ['sum_value'],
         filter:       `greater-or-equal(datetime,${startDate}T00:00:00+00:00),less-than(datetime,${endDate}T00:00:00+00:00)`,
         by:           ['$attributed_channel'],
-        sort:         'datetime',
       },
     },
   });
