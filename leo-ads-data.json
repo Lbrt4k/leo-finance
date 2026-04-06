@@ -1,0 +1,112 @@
+{
+  "emma": {
+    "2025-W46": {
+      "ads": 0,
+      "impressions": 2,
+      "clics": 0
+    },
+    "2025-W47": {
+      "ads": 38.32,
+      "impressions": 5801,
+      "clics": 76
+    },
+    "2025-W48": {
+      "ads": 143.41,
+      "impressions": 18733,
+      "clics": 431
+    },
+    "2025-W49": {
+      "ads": 400.56,
+      "impressions": 64819,
+      "clics": 1336
+    },
+    "2025-W50": {
+      "ads": 776.05,
+      "impressions": 104020,
+      "clics": 1897
+    },
+    "2025-W51": {
+      "ads": 746.76,
+      "impressions": 100793,
+      "clics": 1476
+    },
+    "2025-W52": {
+      "ads": 157.36,
+      "impressions": 41270,
+      "clics": 612
+    },
+    "2026-W01": {
+      "ads": 71.93,
+      "impressions": 22944,
+      "clics": 341
+    },
+    "2026-W02": {
+      "ads": 129.92,
+      "impressions": 29731,
+      "clics": 488
+    },
+    "2026-W03": {
+      "ads": 175.76,
+      "impressions": 28815,
+      "clics": 513
+    },
+    "2026-W04": {
+      "ads": 263.84,
+      "impressions": 44832,
+      "clics": 709
+    },
+    "2026-W05": {
+      "ads": 200.28,
+      "impressions": 23588,
+      "clics": 380
+    },
+    "2026-W06": {
+      "ads": 432.86,
+      "impressions": 55986,
+      "clics": 802
+    },
+    "2026-W07": {
+      "ads": 386.26,
+      "impressions": 58298,
+      "clics": 752
+    },
+    "2026-W08": {
+      "ads": 228.38,
+      "impressions": 36318,
+      "clics": 561
+    },
+    "2026-W09": {
+      "ads": 148.65,
+      "impressions": 29299,
+      "clics": 403
+    },
+    "2026-W10": {
+      "ads": 37.45,
+      "impressions": 7027,
+      "clics": 105
+    },
+    "2026-W11": {
+      "ads": 32.95,
+      "impressions": 8099,
+      "clics": 116
+    },
+    "2026-W12": {
+      "ads": 131.43,
+      "impressions": 18522,
+      "clics": 305
+    },
+    "2026-W13": {
+      "ads": 129.51,
+      "impressions": 21733,
+      "clics": 351
+    },
+    "2026-W14": {
+      "ads": 68.64,
+      "impressions": 12456,
+      "clics": 190
+    }
+  },
+  "_updatedAt": {
+    "emma": "2026-04-06T16:59:24.748Z"
+  }
+}
