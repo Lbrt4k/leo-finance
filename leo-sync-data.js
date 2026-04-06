@@ -1,14 +1,70 @@
 // Léo Finance OS — Sync Data (auto-généré, ne pas modifier)
-// Dernière sync: 2026-04-06T13:34:19.171Z
-// Jours synchronisés: 1
+// Dernière sync: 2026-04-06T13:45:26.963Z
+// Semaines synchronisées: 11
 window.__SYNC_DATA__ = {
   "weeks": {
     "emma": {
       "2026-W14": {
-        "ca": 0,
+        "ca": 536.21,
+        "commandes": 6,
         "retours": 0,
-        "commandes": 0,
-        "nouveaux_clients": 0,
+        "nouveaux_clients": 6,
+        "clients_recurrents": 0
+      },
+      "2026-W06": {
+        "ca": 658.02,
+        "commandes": 11,
+        "retours": 99.33,
+        "nouveaux_clients": 11,
+        "clients_recurrents": 0
+      },
+      "2026-W07": {
+        "ca": 1254.59,
+        "commandes": 21,
+        "retours": 227.18,
+        "nouveaux_clients": 21,
+        "clients_recurrents": 0
+      },
+      "2026-W08": {
+        "ca": 614.21,
+        "commandes": 8,
+        "retours": 89.9,
+        "nouveaux_clients": 8,
+        "clients_recurrents": 0
+      },
+      "2026-W09": {
+        "ca": 557.44,
+        "commandes": 9,
+        "retours": 180.17,
+        "nouveaux_clients": 9,
+        "clients_recurrents": 0
+      },
+      "2026-W10": {
+        "ca": 107.82,
+        "commandes": 2,
+        "retours": 0,
+        "nouveaux_clients": 2,
+        "clients_recurrents": 0
+      },
+      "2026-W11": {
+        "ca": 414.34,
+        "commandes": 7,
+        "retours": 0,
+        "nouveaux_clients": 7,
+        "clients_recurrents": 0
+      },
+      "2026-W12": {
+        "ca": 213.62,
+        "commandes": 4,
+        "retours": 0,
+        "nouveaux_clients": 4,
+        "clients_recurrents": 0
+      },
+      "2026-W13": {
+        "ca": 35.91,
+        "commandes": 1,
+        "retours": 0,
+        "nouveaux_clients": 1,
         "clients_recurrents": 0
       }
     },
@@ -22,7 +78,7 @@ window.__SYNC_DATA__ = {
   "synced_days": [
     "2026-04-05"
   ],
-  "last_sync": "2026-04-06T13:34:19.171Z",
+  "last_sync": "2026-04-06T13:45:26.963Z",
   "synced_fields": [
     "ca",
     "retours",
