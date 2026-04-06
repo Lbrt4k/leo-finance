@@ -297,7 +297,7 @@ async function klaviyoGet(apiKey, endpoint, params = {}) {
 }
 
 async function getKlaviyoMetricId(apiKey) {
-  const metrics = await klaviyoGet(apiKey, 'metrics', { 'page[size]': 50 });
+  const metrics = await klaviyoGet(apiKey, 'metrics', {});
   const metric  = metrics.data?.find(m =>
     m.attributes?.name?.toLowerCase().includes('placed order') ||
     m.attributes?.name?.toLowerCase().includes('order placed')
