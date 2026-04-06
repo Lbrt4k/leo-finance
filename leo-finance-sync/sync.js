@@ -173,28 +173,30 @@ async function fullSyncShopify(cfg) {
   log('🔄', `Full sync Shopify — récupération de toutes les commandes : ${shop}`);
 
   let allOrders = [];
-  // Première URL — created_at_min très ancien pour forcer Shopify à retourner TOUT l'historique
-  let nextUrl = `https://${shop}/admin/api/2024-04/orders.json?` +
-    new URLSearchParams({
-      status:         'any',
-      limit:          250,
-      fields:         'id,total_price,customer,refunds,created_at',
-      order:          'created_at asc',
-      created_at_min: '2018-01-01T00:00:00Z',
-    });
-
+  // Pagination via since_id — plus fiable que le curseur Link
+  let sinceId = 0;
   let page = 0;
-  while (nextUrl) {
-    page++;
-    const res = await fetch(nextUrl, {
-      headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
-    });
 
-    if (res.status === 429) {
-      warn('Rate limit Shopify, attente 2s...');
-      await sleep(2000);
-      continue;
+  while (true) {
+    page++;
+    const params = {
+      status:  'any',
+      limit:   250,
+      fields:  'id,total_price,customer,refunds,created_at',
+      order:   'id asc',
+      since_id: sinceId,
+    };
+
+    let res;
+    while (true) {
+      res = await fetch(
+        `https://${shop}/admin/api/2024-04/orders.json?` + new URLSearchParams(params),
+        { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } }
+      );
+      if (res.status === 429) { warn('Rate limit Shopify, attente 2s...'); await sleep(2000); continue; }
+      break;
     }
+
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       throw new Error(`Shopify orders full sync: HTTP ${res.status} — ${body.slice(0, 200)}`);
@@ -204,14 +206,14 @@ async function fullSyncShopify(cfg) {
     const orders = data.orders || [];
     allOrders = allOrders.concat(orders);
 
-    if (page % 4 === 0) log('📦', `${allOrders.length} commandes récupérées...`);
+    if (page % 4 === 0 || orders.length < 250) log('📦', `${allOrders.length} commandes récupérées...`);
 
-    // Pagination curseur via header Link
-    const link = res.headers.get('Link') || '';
-    const next = link.match(/<([^>]+)>;\s*rel="next"/);
-    nextUrl = next ? next[1] : null;
+    // Arrêt si dernière page
+    if (orders.length < 250) break;
 
-    if (nextUrl) await sleep(300); // rate limiting doux
+    // Prochain batch à partir du dernier ID
+    sinceId = orders[orders.length - 1].id;
+    await sleep(300);
   }
 
   ok(`${allOrders.length} commandes totales récupérées`);
