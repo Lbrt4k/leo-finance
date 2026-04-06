@@ -180,11 +180,11 @@ async function fullSyncShopify(cfg) {
   while (true) {
     page++;
     const params = {
-      status:  'any',
-      limit:   250,
-      fields:  'id,total_price,customer,refunds,created_at',
-      order:   'id asc',
-      since_id: sinceId,
+      status:          'any',
+      limit:           250,
+      fields:          'id,total_price,customer,refunds,created_at',
+      created_at_min:  '2018-01-01T00:00:00Z',
+      since_id:        sinceId,
     };
 
     let res;
