@@ -9,6 +9,10 @@ on:
   # Déclenchement manuel depuis l'onglet "Actions" de GitHub
   workflow_dispatch:
     inputs:
+      full_sync:
+        description: '🗄️ Full sync — récupérer TOUTES les données historiques (oui/non)'
+        required: false
+        default: 'non'
       date:
         description: 'Date à synchroniser (YYYY-MM-DD) — vide = hier'
         required: false
@@ -46,7 +50,10 @@ jobs:
         run: |
           cd leo-finance-sync
 
-          if [ -n "${{ github.event.inputs.range_from }}" ] && [ -n "${{ github.event.inputs.range_to }}" ]; then
+          if [ "${{ github.event.inputs.full_sync }}" = "oui" ]; then
+            echo "▶ Mode FULL SYNC — récupération de toutes les données historiques"
+            node sync.js --full-sync
+          elif [ -n "${{ github.event.inputs.range_from }}" ] && [ -n "${{ github.event.inputs.range_to }}" ]; then
             echo "▶ Mode plage : ${{ github.event.inputs.range_from }} → ${{ github.event.inputs.range_to }}"
             node sync.js --range ${{ github.event.inputs.range_from }} ${{ github.event.inputs.range_to }}
           elif [ -n "${{ github.event.inputs.date }}" ]; then

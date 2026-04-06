@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
  * ╔══════════════════════════════════════════════════════════════╗
- * ║          LÉO FINANCE OS — SYNC ENGINE v1.0                  ║
+ * ║          LÉO FINANCE OS — SYNC ENGINE v2.0                  ║
  * ║  Shopify · Google Ads · Klaviyo → leo-sync-data.js          ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
  * Usage:
- *   node sync.js              → hier (auto)
- *   node sync.js 2026-04-05   → date spécifique
+ *   node sync.js                          → hier (auto)
+ *   node sync.js 2026-04-05               → date spécifique
  *   node sync.js --range 2026-03-01 2026-04-05  → plage de dates
+ *   node sync.js --full-sync              → TOUTES les données historiques
  *
  * Champs automatiques:
  *   ✅ CA Brut          (Shopify Orders)
@@ -17,9 +18,6 @@
  *   ✅ Commandes        (Shopify Orders count)
  *   ✅ Nouveaux clients (Shopify Customers)
  *   ✅ Clients récurr.  (Shopify Customers history)
- *   ✅ Ads (dépenses)   (Google Ads API)
- *   ✅ Impressions      (Google Ads API)
- *   ✅ Clics            (Google Ads API)
  *
  * Champs MANUELS (non synchronisés):
  *   ✋ Coût Fournisseur
@@ -93,7 +91,7 @@ async function refreshGoogleToken(clientId, clientSecret, refreshToken) {
   return data.access_token;
 }
 
-// ── SHOPIFY ────────────────────────────────────────────────────────────────────
+// ── SHOPIFY HELPERS ────────────────────────────────────────────────────────────
 async function shopifyGet(shop, token, endpoint, params = {}) {
   const qs = Object.keys(params).length ? '?' + new URLSearchParams(params) : '';
   const url = `https://${shop}/admin/api/2024-04/${endpoint}${qs}`;
@@ -109,12 +107,12 @@ async function shopifyGet(shop, token, endpoint, params = {}) {
   return res.json();
 }
 
+// ── SHOPIFY : sync journalier (mode normal) ────────────────────────────────────
 async function syncShopify(cfg, dateStr) {
   const { shop, token } = cfg;
   const start = `${dateStr}T00:00:00+00:00`;
   const end   = `${dateStr}T23:59:59+00:00`;
 
-  // ── Orders ──
   let allOrders = [];
   let params = {
     status: 'any',
@@ -124,22 +122,18 @@ async function syncShopify(cfg, dateStr) {
     fields: 'id,total_price,financial_status,customer,refunds,total_shipping_price_set,gateway',
   };
 
-  // Paginate via limit (simplified — handles up to ~1000 orders/day)
   for (let page = 0; page < 4; page++) {
     const data = await shopifyGet(shop, token, 'orders.json', params);
     const orders = data.orders || [];
     allOrders = allOrders.concat(orders);
     if (orders.length < 250) break;
-    // Next page: use last order ID as since_id
     params = { ...params, since_id: orders[orders.length - 1].id };
     delete params.created_at_min; delete params.created_at_max;
   }
 
-  // ── CA & Commandes ──
   const ca = allOrders.reduce((s, o) => s + parseFloat(o.total_price || 0), 0);
   const commandes = allOrders.length;
 
-  // ── Retours (refunds) ──
   let retours = 0;
   allOrders.forEach(o => {
     (o.refunds || []).forEach(r => {
@@ -149,7 +143,6 @@ async function syncShopify(cfg, dateStr) {
     });
   });
 
-  // ── Clients nouveaux vs récurrents ──
   let nouveaux = 0, recurrents = 0;
   const checked = new Set();
   for (const o of allOrders) {
@@ -159,11 +152,10 @@ async function syncShopify(cfg, dateStr) {
     checked.add(cid);
     try {
       const { customer } = await shopifyGet(shop, token, `customers/${cid}.json`);
-      // orders_count includes current order; >1 means returning
       if ((customer?.orders_count || 0) > 1) recurrents++;
       else nouveaux++;
     } catch { nouveaux++; }
-    await sleep(100); // gentle rate limiting
+    await sleep(100);
   }
 
   return {
@@ -175,7 +167,101 @@ async function syncShopify(cfg, dateStr) {
   };
 }
 
-// ── KLAVIYO ───────────────────────────────────────────────────────────────────
+// ── SHOPIFY : full sync historique ─────────────────────────────────────────────
+async function fullSyncShopify(cfg) {
+  const { shop, token } = cfg;
+  log('🔄', `Full sync Shopify — récupération de toutes les commandes : ${shop}`);
+
+  let allOrders = [];
+  // Première URL — pas de filtre de date, toutes les commandes
+  let nextUrl = `https://${shop}/admin/api/2024-04/orders.json?` +
+    new URLSearchParams({
+      status: 'any',
+      limit:  250,
+      fields: 'id,total_price,customer,refunds,created_at',
+      order:  'created_at asc',
+    });
+
+  let page = 0;
+  while (nextUrl) {
+    page++;
+    const res = await fetch(nextUrl, {
+      headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+    });
+
+    if (res.status === 429) {
+      warn('Rate limit Shopify, attente 2s...');
+      await sleep(2000);
+      continue;
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Shopify orders full sync: HTTP ${res.status} — ${body.slice(0, 200)}`);
+    }
+
+    const data = await res.json();
+    const orders = data.orders || [];
+    allOrders = allOrders.concat(orders);
+
+    if (page % 4 === 0) log('📦', `${allOrders.length} commandes récupérées...`);
+
+    // Pagination curseur via header Link
+    const link = res.headers.get('Link') || '';
+    const next = link.match(/<([^>]+)>;\s*rel="next"/);
+    nextUrl = next ? next[1] : null;
+
+    if (nextUrl) await sleep(300); // rate limiting doux
+  }
+
+  ok(`${allOrders.length} commandes totales récupérées`);
+
+  // Trier chronologiquement pour déterminer nouveaux vs récurrents
+  allOrders.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+  const customerSeen = new Set();
+  const weeklyData   = {};
+
+  for (const order of allOrders) {
+    const dateStr = order.created_at.split('T')[0];
+    const weekKey = getISOWeekKey(dateStr);
+
+    if (!weeklyData[weekKey]) {
+      weeklyData[weekKey] = { ca: 0, commandes: 0, retours: 0, nouveaux_clients: 0, clients_recurrents: 0 };
+    }
+    const w = weeklyData[weekKey];
+
+    w.ca += parseFloat(order.total_price || 0);
+    w.commandes++;
+
+    // Retours
+    (order.refunds || []).forEach(r => {
+      (r.transactions || []).forEach(t => {
+        if (['refund', 'void'].includes(t.kind)) {
+          w.retours += parseFloat(t.amount || 0);
+        }
+      });
+    });
+
+    // Nouveau vs récurrent (basé sur l'historique des commandes du dataset)
+    const cid = order.customer?.id;
+    if (!cid || !customerSeen.has(cid)) {
+      w.nouveaux_clients++;
+      if (cid) customerSeen.add(cid);
+    } else {
+      w.clients_recurrents++;
+    }
+  }
+
+  // Arrondi
+  for (const w of Object.values(weeklyData)) {
+    w.ca      = Math.round(w.ca      * 100) / 100;
+    w.retours = Math.round(w.retours * 100) / 100;
+  }
+
+  return weeklyData;
+}
+
+// ── KLAVIYO HELPERS ───────────────────────────────────────────────────────────
 async function klaviyoPost(apiKey, endpoint, body) {
   const res = await fetch(`https://a.klaviyo.com/api/${endpoint}`, {
     method: 'POST',
@@ -200,19 +286,35 @@ async function klaviyoGet(apiKey, endpoint, params = {}) {
       'Accept': 'application/json',
     },
   });
-  if (!res.ok) throw new Error(`Klaviyo /${endpoint}: HTTP ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Klaviyo /${endpoint}: HTTP ${res.status} — ${body.slice(0, 200)}`);
+  }
   return res.json();
 }
 
+async function getKlaviyoMetricId(apiKey) {
+  const metrics = await klaviyoGet(apiKey, 'metrics', { 'page[size]': 50 });
+  const metric  = metrics.data?.find(m =>
+    m.attributes?.name?.toLowerCase().includes('placed order') ||
+    m.attributes?.name?.toLowerCase().includes('order placed')
+  );
+  if (!metric) {
+    const names = metrics.data?.map(m => m.attributes?.name).join(', ') || 'aucun';
+    warn(`Klaviyo: metric "Placed Order" introuvable. Metrics dispo: ${names}`);
+    return null;
+  }
+  ok(`Klaviyo: metric → "${metric.attributes.name}" (${metric.id})`);
+  return metric.id;
+}
+
+// ── KLAVIYO : sync journalier (mode normal) ───────────────────────────────────
 async function syncKlaviyo(cfg, dateStr) {
   const { api_key } = cfg;
+  const metricId = await getKlaviyoMetricId(api_key);
+  if (!metricId) return { ca_email: 0 };
 
-  // Find "Placed Order" metric ID
-  const metrics = await klaviyoGet(api_key, 'metrics', { 'filter': 'contains(name,"Placed Order")' });
-  const metricId = metrics.data?.[0]?.id;
-  if (!metricId) { warn('Klaviyo: metric "Placed Order" introuvable'); return { ca_email: 0 }; }
-
-  const start = `${dateStr}T00:00:00+00:00`;
+  const start   = `${dateStr}T00:00:00+00:00`;
   const nextDay = new Date(dateStr + 'T12:00:00Z');
   nextDay.setDate(nextDay.getDate() + 1);
   const end = nextDay.toISOString().split('T')[0] + 'T00:00:00+00:00';
@@ -221,17 +323,16 @@ async function syncKlaviyo(cfg, dateStr) {
     data: {
       type: 'metric-aggregate',
       attributes: {
-        metric_id: metricId,
-        interval: 'day',
+        metric_id:    metricId,
+        interval:     'day',
         measurements: ['sum_value'],
-        filter: `greater-or-equal(datetime,${start}),less-than(datetime,${end})`,
-        by: ['$attributed_channel'],
-        sort: '-datetime',
+        filter:       `greater-or-equal(datetime,${start}),less-than(datetime,${end})`,
+        by:           ['$attributed_channel'],
+        sort:         '-datetime',
       },
     },
   });
 
-  // Sum revenue attributed to email channel
   let ca_email = 0;
   const results = data.data?.attributes?.results || [];
   for (const r of results) {
@@ -242,6 +343,61 @@ async function syncKlaviyo(cfg, dateStr) {
   }
 
   return { ca_email: Math.round(ca_email * 100) / 100 };
+}
+
+// ── KLAVIYO : full sync historique ────────────────────────────────────────────
+async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
+  const { api_key } = cfg;
+  const metricId = await getKlaviyoMetricId(api_key);
+  if (!metricId) return {};
+
+  // Calcul date de fin (demain)
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const endDate = tomorrow.toISOString().split('T')[0];
+
+  log('🔄', `Klaviyo: récupération du CA email depuis ${startDate}...`);
+
+  const data = await klaviyoPost(api_key, 'metric-aggregates/', {
+    data: {
+      type: 'metric-aggregate',
+      attributes: {
+        metric_id:    metricId,
+        interval:     'day',
+        measurements: ['sum_value'],
+        filter:       `greater-or-equal(datetime,${startDate}T00:00:00+00:00),less-than(datetime,${endDate}T00:00:00+00:00)`,
+        by:           ['$attributed_channel'],
+        sort:         'datetime',
+      },
+    },
+  });
+
+  const dates   = data.data?.attributes?.dates   || [];
+  const results = data.data?.attributes?.results || [];
+
+  const weeklyData = {};
+
+  for (const r of results) {
+    const channel = (r.dimensions?.[0] || '').toLowerCase();
+    if (!channel.includes('email') && !channel.includes('flow') && !channel.includes('campaign')) continue;
+
+    const values = r.measurements?.sum_value || [];
+    values.forEach((val, i) => {
+      if (!val || !dates[i]) return;
+      const dateStr = dates[i].split('T')[0];
+      const weekKey = getISOWeekKey(dateStr);
+      if (!weeklyData[weekKey]) weeklyData[weekKey] = { ca_email: 0 };
+      weeklyData[weekKey].ca_email += parseFloat(val || 0);
+    });
+  }
+
+  // Arrondi
+  for (const w of Object.values(weeklyData)) {
+    w.ca_email = Math.round(w.ca_email * 100) / 100;
+  }
+
+  ok(`Klaviyo: ${Object.keys(weeklyData).length} semaines avec CA email`);
+  return weeklyData;
 }
 
 // ── GOOGLE ADS ────────────────────────────────────────────────────────────────
@@ -279,9 +435,9 @@ async function syncGoogleAds(cfg, dateStr, accessToken) {
   let ads = 0, impressions = 0, clics = 0;
 
   for (const result of (data.results || [])) {
-    ads        += parseInt(result.metrics?.costMicros || 0) / 1_000_000;
-    impressions += parseInt(result.metrics?.impressions || 0);
-    clics       += parseInt(result.metrics?.clicks || 0);
+    ads         += parseInt(result.metrics?.costMicros    || 0) / 1_000_000;
+    impressions += parseInt(result.metrics?.impressions   || 0);
+    clics       += parseInt(result.metrics?.clicks        || 0);
   }
 
   return {
@@ -310,7 +466,7 @@ function mergeDayIntoWeek(weekData, dayResult) {
   return updated;
 }
 
-// ── MAIN ──────────────────────────────────────────────────────────────────────
+// ── SYNC JOURNALIER ────────────────────────────────────────────────────────────
 async function syncDate(dateStr, config, existingData) {
   const weekKey = getISOWeekKey(dateStr);
   console.log(`\n${C.bold}${C.cyan}  📅 ${dateStr}  →  ${weekKey}${C.reset}`);
@@ -318,7 +474,6 @@ async function syncDate(dateStr, config, existingData) {
 
   const results = {};
 
-  // Refresh Google token once per run
   let googleToken = null;
   if (config.google?.refresh_token && !config.google.refresh_token.includes('XXX')) {
     try {
@@ -336,7 +491,6 @@ async function syncDate(dateStr, config, existingData) {
     results[bid] = {};
     console.log(`\n  ${boutique.icon || '🏪'}  ${C.bold}${boutique.name}${C.reset}`);
 
-    // Shopify
     if (boutique.shopify?.shop && !boutique.shopify.token.includes('XXX')) {
       try {
         const d = await syncShopify(boutique.shopify, dateStr);
@@ -345,7 +499,6 @@ async function syncDate(dateStr, config, existingData) {
       } catch (e) { fail(`Shopify: ${e.message}`); }
     }
 
-    // Klaviyo
     if (boutique.klaviyo?.api_key && !boutique.klaviyo.api_key.includes('XXX')) {
       try {
         const d = await syncKlaviyo(boutique.klaviyo, dateStr);
@@ -354,7 +507,6 @@ async function syncDate(dateStr, config, existingData) {
       } catch (e) { fail(`Klaviyo: ${e.message}`); }
     }
 
-    // Google Ads
     if (boutique.google_ads?.customer_id && !boutique.google_ads.customer_id.includes('XXX') && googleToken) {
       try {
         const d = await syncGoogleAds(boutique.google_ads, dateStr, googleToken);
@@ -363,7 +515,6 @@ async function syncDate(dateStr, config, existingData) {
       } catch (e) { fail(`Google Ads: ${e.message}`); }
     }
 
-    // Merge into weekly store
     if (!existingData.weeks[bid])          existingData.weeks[bid] = {};
     if (!existingData.weeks[bid][weekKey]) existingData.weeks[bid][weekKey] = {};
     existingData.weeks[bid][weekKey] = mergeDayIntoWeek(
@@ -375,9 +526,64 @@ async function syncDate(dateStr, config, existingData) {
   return results;
 }
 
+// ── FULL SYNC HISTORIQUE ───────────────────────────────────────────────────────
+async function runFullSync(config, existingData) {
+  console.log(`\n${C.bold}${C.cyan}  🗄️  MODE FULL SYNC — Récupération de toutes les données historiques${C.reset}`);
+  sep();
+
+  for (const boutique of config.boutiques) {
+    const bid = boutique.id;
+    if (!existingData.weeks[bid]) existingData.weeks[bid] = {};
+
+    console.log(`\n  ${boutique.icon || '🏪'}  ${C.bold}${boutique.name}${C.reset}`);
+    sep();
+
+    // ── Shopify full sync ──
+    if (boutique.shopify?.shop && boutique.shopify.token && !boutique.shopify.token.includes('XXX')) {
+      try {
+        const shopifyWeeks = await fullSyncShopify(boutique.shopify);
+        const weekCount = Object.keys(shopifyWeeks).length;
+
+        for (const [weekKey, data] of Object.entries(shopifyWeeks)) {
+          const existing = existingData.weeks[bid][weekKey] || {};
+          // Preserve manual fields, overwrite synced fields
+          existingData.weeks[bid][weekKey] = {
+            // Manual fields preserved
+            ...(existing.fournisseur != null && { fournisseur: existing.fournisseur }),
+            ...(existing.livraison   != null && { livraison:   existing.livraison   }),
+            ...(existing.shopify     != null && { shopify:     existing.shopify     }),
+            ...(existing.autres      != null && { autres:      existing.autres      }),
+            // Synced fields overwritten
+            ...data,
+            // Preserve ca_email if already synced (Klaviyo runs after)
+            ...(existing.ca_email    != null && { ca_email:    existing.ca_email    }),
+          };
+        }
+        ok(`Shopify: ${weekCount} semaines · ${Object.keys(shopifyWeeks).reduce((s, k) => s + (shopifyWeeks[k].commandes || 0), 0)} commandes totales`);
+      } catch (e) { fail(`Shopify full sync: ${e.message}`); }
+    }
+
+    // ── Klaviyo full sync ──
+    if (boutique.klaviyo?.api_key && !boutique.klaviyo.api_key.includes('XXX')) {
+      try {
+        const klaviyoWeeks = await fullSyncKlaviyo(boutique.klaviyo);
+        for (const [weekKey, data] of Object.entries(klaviyoWeeks)) {
+          if (!existingData.weeks[bid][weekKey]) existingData.weeks[bid][weekKey] = {};
+          Object.assign(existingData.weeks[bid][weekKey], data);
+        }
+        ok(`Klaviyo: ${Object.keys(klaviyoWeeks).length} semaines avec CA email`);
+      } catch (e) { fail(`Klaviyo full sync: ${e.message}`); }
+    }
+
+    // Résumé boutique
+    const totalWeeks = Object.keys(existingData.weeks[bid] || {}).length;
+    ok(`${boutique.name}: ${totalWeeks} semaines au total dans le dashboard`);
+  }
+}
+
 // ── CONFIG : fichier local OU variables d'environnement (GitHub Actions) ──────
 function loadConfigFromEnv() {
-  log('🔑', 'Mode GitHub Actions — lecture des secrets depuis les variables d\'environnement');
+  log('🔑', "Mode GitHub Actions — lecture des secrets depuis les variables d'environnement");
 
   const BOUTIQUE_DEFS = [
     { id: 'emma',    name: "Les Peignoirs d'Emma", color: '#f472b6', icon: '🛁' },
@@ -397,14 +603,13 @@ function loadConfigFromEnv() {
         api_key: process.env[`BOUTIQUE_${ID}_KLAVIYO_KEY`] || '',
       },
       google_ads: {
-        customer_id:     process.env[`BOUTIQUE_${ID}_GADS_CUSTOMER`]  || '',
-        developer_token: process.env[`BOUTIQUE_${ID}_GADS_DEV_TOKEN`] || '',
+        customer_id:     process.env[`BOUTIQUE_${ID}_GADS_CUSTOMER`]   || '',
+        developer_token: process.env[`BOUTIQUE_${ID}_GADS_DEV_TOKEN`]  || '',
         manager_id:      process.env[`BOUTIQUE_${ID}_GADS_MANAGER_ID`] || '',
       },
     };
-    // Skip boutiques with no Shopify token configured
-    if (!cfg.shopify.token) {
-      warn(`Boutique "${def.name}" ignorée (BOUTIQUE_${ID}_SHOPIFY_TOKEN absent)`);
+    if (!cfg.shopify.token && !cfg.klaviyo.api_key) {
+      warn(`Boutique "${def.name}" ignorée (aucun token configuré)`);
       return null;
     }
     return cfg;
@@ -420,12 +625,13 @@ function loadConfigFromEnv() {
   };
 }
 
+// ── MAIN ──────────────────────────────────────────────────────────────────────
 async function main() {
   console.log(`\n${C.bold}${C.white}╔══════════════════════════════════════════════════╗`);
-  console.log(`  🚀  LÉO FINANCE OS — SYNC`);
+  console.log(`  🚀  LÉO FINANCE OS — SYNC v2.0`);
   console.log(`╚══════════════════════════════════════════════════╝${C.reset}\n`);
 
-  // Détection automatique : env vars (GitHub Actions) ou config.json (local)
+  // Détection auto : env vars (GitHub Actions) ou config.json (local)
   const useEnvVars = !!process.env.BOUTIQUE_EMMA_SHOPIFY_TOKEN
                   || !!process.env.BOUTIQUE_AITAVIA_SHOPIFY_TOKEN
                   || !!process.env.BOUTIQUE_KIMOKO_SHOPIFY_TOKEN;
@@ -442,19 +648,7 @@ async function main() {
     log('📁', 'Mode local — lecture de config.json');
   }
 
-  // Parse arguments
-  const args = process.argv.slice(2);
-  let dates = [];
-  if (args[0] === '--range') {
-    dates = dateRange(args[1], args[2]);
-    log('📆', `Plage: ${args[1]} → ${args[2]} (${dates.length} jours)`);
-  } else if (args[0]) {
-    dates = [args[0]];
-  } else {
-    dates = [yesterday()];
-  }
-
-  // Load existing sync data
+  // Charger les données existantes (pour préserver les champs manuels)
   let existingData = { weeks: {}, synced_days: [], last_sync: null };
   if (existsSync(OUTPUT_FILE)) {
     const content = readFileSync(OUTPUT_FILE, 'utf-8');
@@ -465,25 +659,47 @@ async function main() {
     }
   }
 
-  // Sync each date
-  for (const dateStr of dates) {
-    await syncDate(dateStr, config, existingData);
-    if (!existingData.synced_days.includes(dateStr)) {
-      existingData.synced_days.push(dateStr);
+  // Parse arguments
+  const args = process.argv.slice(2);
+
+  if (args[0] === '--full-sync') {
+    // ── MODE FULL SYNC ──
+    await runFullSync(config, existingData);
+
+  } else {
+    // ── MODE NORMAL (journalier) ──
+    let dates = [];
+    if (args[0] === '--range') {
+      dates = dateRange(args[1], args[2]);
+      log('📆', `Plage: ${args[1]} → ${args[2]} (${dates.length} jours)`);
+    } else if (args[0]) {
+      dates = [args[0]];
+    } else {
+      dates = [yesterday()];
+    }
+
+    for (const dateStr of dates) {
+      await syncDate(dateStr, config, existingData);
+      if (!existingData.synced_days.includes(dateStr)) {
+        existingData.synced_days.push(dateStr);
+      }
     }
   }
 
-  // Finalize output
-  existingData.last_sync         = new Date().toISOString();
-  existingData.synced_fields     = NUMERIC_FIELDS;
-  existingData.boutiques_config  = config.boutiques.map(b => ({
+  // Finaliser la sortie
+  existingData.last_sync        = new Date().toISOString();
+  existingData.synced_fields    = NUMERIC_FIELDS;
+  existingData.boutiques_config = config.boutiques.map(b => ({
     id: b.id, name: b.name, color: b.color, icon: b.icon,
   }));
+
+  const totalWeeks = Object.values(existingData.weeks)
+    .reduce((s, b) => s + Object.keys(b).length, 0);
 
   const output = [
     '// Léo Finance OS — Sync Data (auto-généré, ne pas modifier)',
     `// Dernière sync: ${existingData.last_sync}`,
-    `// Jours synchronisés: ${existingData.synced_days.length}`,
+    `// Semaines synchronisées: ${totalWeeks}`,
     `window.__SYNC_DATA__ = ${JSON.stringify(existingData, null, 2)};`,
   ].join('\n');
 
@@ -492,7 +708,7 @@ async function main() {
   sep();
   ok(`${C.bold}Sync terminée !${C.reset}`);
   ok(`Fichier: leo-sync-data.js`);
-  ok(`Jours synchronisés: ${existingData.synced_days.length}`);
+  ok(`Semaines dans le dashboard: ${totalWeeks}`);
   console.log('');
 }
 
