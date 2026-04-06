@@ -1,0 +1,1747 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Léo Finance OS — Enterprise Tracking</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<!-- Sync data injected by leo-finance-sync/sync.js — optional, silently ignored if absent -->
+<script src="leo-sync-data.js" onerror="void 0"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%}
+body{background:#07070f;font-family:'Inter',-apple-system,sans-serif}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:4px}
+input[type=number]{-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes orb1{0%,100%{transform:translate(0,0)}50%{transform:translate(50px,-30px)}}
+@keyframes orb2{0%,100%{transform:translate(0,0)}50%{transform:translate(-30px,40px)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.6}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useMemo,useRef}=React;
+const STORAGE_KEY='leo_finance_v3';
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function getISOWeek(date){
+  const d=new Date(date);d.setHours(0,0,0,0);d.setDate(d.getDate()+3-(d.getDay()+6)%7);
+  const w1=new Date(d.getFullYear(),0,4);
+  return[d.getFullYear(),1+Math.round(((d-w1)/86400000-3+(w1.getDay()+6)%7)/7)];
+}
+function weekKey(date){const[y,w]=getISOWeek(date);return`${y}-W${String(w).padStart(2,'0')}`;}
+function weekLabel(key){
+  const[y,w]=key.split('-W').map(Number);
+  const jan4=new Date(y,0,4);const s=new Date(jan4);
+  s.setDate(jan4.getDate()-((jan4.getDay()+6)%7)+(w-1)*7);
+  const e=new Date(s);e.setDate(s.getDate()+6);
+  const f=d=>d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+  return`${f(s)} – ${f(e)}`;
+}
+function weekToMonth(key){
+  const[y,w]=key.split('-W').map(Number);
+  const jan4=new Date(y,0,4);const s=new Date(jan4);
+  s.setDate(jan4.getDate()-((jan4.getDay()+6)%7)+(w-1)*7);
+  return`${s.getFullYear()}-${String(s.getMonth()+1).padStart(2,'0')}`;
+}
+function monthLabel(key){const[y,m]=key.split('-').map(Number);return new Date(y,m-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});}
+function eur(v,dec=0){if(v==null||isNaN(v)||!isFinite(v))return'—';const a=Math.abs(v);const s=new Intl.NumberFormat('fr-FR',{minimumFractionDigits:dec,maximumFractionDigits:dec}).format(a);return(v<0?'–':'')+s+' €';}
+function pct(v,dec=1){if(v==null||isNaN(v)||!isFinite(v))return'—';return new Intl.NumberFormat('fr-FR',{minimumFractionDigits:dec,maximumFractionDigits:dec}).format(v)+'%';}
+function xf(v){if(!v||isNaN(v)||!isFinite(v))return'—';return new Intl.NumberFormat('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(v)+'x';}
+function nf(v){if(v==null||isNaN(v))return'—';return new Intl.NumberFormat('fr-FR').format(Math.round(v));}
+
+const col={
+  roas:v=>!v||!isFinite(v)?'#555':v>=4?'#10b981':v>=2.5?'#f59e0b':'#ef4444',
+  marge:v=>!v?'#555':v>=35?'#10b981':v>=20?'#f59e0b':'#ef4444',
+  benef:v=>v==null?'#555':v>=0?'#10b981':'#ef4444',
+  conv:v=>!v?'#555':v>=3?'#10b981':v>=1?'#f59e0b':'#ef4444',
+  abandon:v=>!v?'#555':v<=60?'#10b981':v<=75?'#f59e0b':'#ef4444',
+  retour:v=>!v?'#555':v<=2?'#10b981':v<=5?'#f59e0b':'#ef4444',
+  roi:v=>!v?'#555':v>=50?'#10b981':v>=20?'#f59e0b':'#ef4444',
+};
+
+// ─── CALC ENGINE ──────────────────────────────────────────────────────────────
+function calc(d){
+  if(!d)return{};
+  const ca=+d.ca||0,ads=+d.ads||0,fourn=+d.fournisseur||0;
+  const retours=+d.retours||0,livraison=+d.livraison||0;
+  const shopify=+d.shopify||0,autres=+d.autres||0;
+  const sessions=+d.sessions||0,ajouts=+d.ajouts_panier||0;
+  const commandes=+d.commandes||0,nouveaux=+d.nouveaux_clients||0;
+  const ca_email=+d.ca_email||0,recurrents=+d.clients_recurrents||0;
+  const impressions=+d.impressions||0,clics=+d.clics||0;
+
+  const ca_net=ca-retours;
+  const total_charges=ads+fourn+livraison+shopify+autres;
+  const marge_brute=ca_net-fourn;
+  const benef=ca_net-total_charges;
+
+  const taux_marge_brute=ca_net>0?(marge_brute/ca_net)*100:null;
+  const taux_benef=ca_net>0?(benef/ca_net)*100:null;
+  const taux_retour=ca>0?(retours/ca)*100:null;
+  const part_ads=ca_net>0?(ads/ca_net)*100:null;
+
+  const roas=ads>0?ca/ads:null;
+  const roas_net=ads>0?ca_net/ads:null;
+  const cpa=commandes>0?ads/commandes:null;
+  const ctr=impressions>0?(clics/impressions)*100:null;
+  const cpc=clics>0?ads/clics:null;
+
+  const taux_conversion=sessions>0?(commandes/sessions)*100:null;
+  const taux_ajout_panier=sessions>0?(ajouts/sessions)*100:null;
+  const taux_abandon_panier=ajouts>0?((ajouts-commandes)/ajouts)*100:null;
+
+  const aov=commandes>0?ca/commandes:null;
+  const aov_net=commandes>0?ca_net/commandes:null;
+  const revenu_par_visite=sessions>0?ca/sessions:null;
+  const roi=total_charges>0?(benef/total_charges)*100:null;
+
+  const part_email_ca=ca_net>0?(ca_email/ca_net)*100:null;
+  const taux_new_clients=commandes>0?(nouveaux/commandes)*100:null;
+  const taux_recurrence=commandes>0?(recurrents/commandes)*100:null;
+
+  return{
+    ca,ads,fournisseur:fourn,retours,livraison,shopify,autres,
+    sessions,ajouts_panier:ajouts,commandes,nouveaux_clients:nouveaux,
+    ca_email,clients_recurrents:recurrents,impressions,clics,
+    ca_net,total_charges,marge_brute,benef,
+    taux_marge_brute,taux_benef,taux_retour,part_ads,
+    roas,roas_net,cpa,ctr,cpc,
+    taux_conversion,taux_ajout_panier,taux_abandon_panier,
+    aov,aov_net,revenu_par_visite,roi,
+    part_email_ca,taux_new_clients,taux_recurrence,
+  };
+}
+
+function sumCalc(rows){
+  const t={ca:0,ads:0,fournisseur:0,retours:0,livraison:0,shopify:0,autres:0,sessions:0,ajouts_panier:0,commandes:0,nouveaux_clients:0,ca_email:0,clients_recurrents:0,impressions:0,clics:0};
+  rows.forEach(r=>{Object.keys(t).forEach(k=>{t[k]+=(+r[k])||0;});});
+  return calc(t);
+}
+
+const EMPTY=()=>({ca:'',ads:'',fournisseur:'',retours:'',livraison:'',shopify:'',autres:'',sessions:'',ajouts_panier:'',commandes:'',nouveaux_clients:'',ca_email:'',clients_recurrents:'',impressions:'',clics:''});
+
+const FIELDS=[
+  {id:'ca',       label:'CA Brut',              section:'revenus', icon:'💵', required:true},
+  {id:'retours',  label:'Retours / Remboursements', section:'revenus', icon:'↩️'},
+  {id:'ca_email', label:'CA Email Klaviyo',      section:'revenus', icon:'📧'},
+  {id:'ads',      label:'Dépenses Google Ads',   section:'charges', icon:'🎯'},
+  {id:'fournisseur',label:'Coût Fournisseur (COGS)',section:'charges',icon:'📦'},
+  {id:'livraison',label:'Frais de livraison',    section:'charges', icon:'🚚'},
+  {id:'shopify',  label:'Frais Shopify / transac.',section:'charges',icon:'🏪'},
+  {id:'autres',   label:'Autres frais',          section:'charges', icon:'➕'},
+  {id:'impressions',label:'Impressions Ads',     section:'trafic',  icon:'👁'},
+  {id:'clics',    label:'Clics Ads',             section:'trafic',  icon:'🖱'},
+  {id:'sessions', label:'Sessions (visites site)',section:'trafic',  icon:'🌐'},
+  {id:'ajouts_panier',label:'Ajouts au panier',  section:'trafic',  icon:'🛒'},
+  {id:'commandes',label:'Commandes',             section:'trafic',  icon:'✅'},
+  {id:'nouveaux_clients',label:'Nouveaux clients',section:'clients', icon:'🆕'},
+  {id:'clients_recurrents',label:'Clients récurrents',section:'clients',icon:'🔄'},
+];
+const ALL_FIELD_IDS=FIELDS.map(f=>f.id);
+const DEFAULT_FIELDS=()=>Object.fromEntries(ALL_FIELD_IDS.map(id=>[id,true]));
+
+const DEFAULT_BOUTIQUES=[
+  {id:'emma',name:"Les Peignoirs d'Emma",color:'#f472b6',icon:'🛁'},
+  {id:'aitavia',name:'AïtaVia',color:'#a78bfa',icon:'👟'},
+  {id:'kimoko',name:'Kimoko',color:'#fbbf24',icon:'🛍️'},
+];
+
+function loadState(){try{const s=localStorage.getItem(STORAGE_KEY);return s?JSON.parse(s):null;}catch{return null;}}
+function saveState(s){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(s));}catch{}}
+function timeAgo(isoStr){
+  if(!isoStr)return null;
+  const d=new Date(isoStr),now=new Date(),diff=Math.floor((now-d)/1000);
+  if(diff<60)return'à l\'instant';
+  if(diff<3600)return`il y a ${Math.floor(diff/60)} min`;
+  if(diff<86400)return`il y a ${Math.floor(diff/3600)}h`;
+  return`il y a ${Math.floor(diff/86400)}j`;
+}
+// ─── SYNC MERGE (called once on load if window.__SYNC_DATA__ is present) ──────
+function mergeSync(prevData, bouts){
+  const S=window.__SYNC_DATA__;
+  if(!S||!S.weeks)return null;
+  const sf=Array.isArray(S.synced_fields)?S.synced_fields:[];
+  const next={...prevData};
+  bouts.forEach(b=>{
+    const bWeeks=S.weeks[b.id];
+    if(!bWeeks)return;
+    next[b.id]={...next[b.id]};
+    Object.entries(bWeeks).forEach(([wk,vals])=>{
+      const existing=next[b.id][wk]||{};
+      const merged={...existing};
+      sf.forEach(fid=>{if(vals[fid]!=null&&vals[fid]!=='')merged[fid]=vals[fid];});
+      next[b.id][wk]=merged;
+    });
+  });
+  return next;
+}
+
+// ─── UI ATOMS ─────────────────────────────────────────────────────────────────
+function Inp({label,value,onChange,icon,hint}){
+  const[focus,setFocus]=useState(false);
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:4}}>
+      <div style={{fontSize:9,color:'#555',fontWeight:700,textTransform:'uppercase',letterSpacing:1,display:'flex',gap:4,alignItems:'center'}}>
+        {icon&&<span>{icon}</span>}{label}{hint&&<span style={{color:'#333',fontWeight:400,textTransform:'none',letterSpacing:0}}>· {hint}</span>}
+      </div>
+      <input type="number" min="0" step="any" value={value||''} onChange={e=>onChange(e.target.value)} placeholder="0"
+        onFocus={()=>setFocus(true)} onBlur={()=>setFocus(false)}
+        style={{background:'rgba(255,255,255,0.04)',border:`1px solid ${focus?'rgba(139,92,246,0.5)':'rgba(255,255,255,0.07)'}`,borderRadius:9,padding:'8px 11px',color:'#fff',fontSize:13,fontWeight:600,outline:'none',transition:'border-color 0.2s',width:'100%'}}
+      />
+    </div>
+  );
+}
+
+function KPI({label,value,color,size='sm',icon}){
+  const fs=size==='lg'?24:size==='md'?18:15;
+  return(
+    <div style={{padding:size==='lg'?'16px 14px':'11px 12px',borderRadius:13,border:`1px solid ${color||'#333'}2a`,background:`${color||'#8b5cf6'}07`,position:'relative',overflow:'hidden'}}>
+      {icon&&<div style={{position:'absolute',top:-8,right:-4,fontSize:32,opacity:0.06}}>{icon}</div>}
+      <div style={{fontSize:8,color:'#444',fontWeight:700,textTransform:'uppercase',letterSpacing:1.3,marginBottom:5,lineHeight:1.4}}>{label}</div>
+      <div style={{fontSize:fs,fontWeight:900,color:color||'#fff',lineHeight:1}}>{value}</div>
+    </div>
+  );
+}
+
+function SectionTitle({children,color='#8b5cf6'}){
+  return(
+    <div style={{fontSize:9,fontWeight:800,color,textTransform:'uppercase',letterSpacing:2,marginBottom:10,marginTop:2,display:'flex',alignItems:'center',gap:6}}>
+      <div style={{height:1,width:12,background:color,opacity:0.5}}/>
+      {children}
+      <div style={{height:1,flex:1,background:`linear-gradient(90deg,${color}33,transparent)`}}/>
+    </div>
+  );
+}
+
+function FunnelBar({label,value,max,color}){
+  const p=max>0?Math.min(100,(value/max)*100):0;
+  return(
+    <div style={{marginBottom:7}}>
+      <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+        <span style={{fontSize:11,color:'#777'}}>{label}</span>
+        <span style={{fontSize:11,fontWeight:700,color}}>{nf(value)}</span>
+      </div>
+      <div style={{height:5,borderRadius:3,background:'rgba(255,255,255,0.06)'}}>
+        <div style={{height:'100%',width:`${p}%`,borderRadius:3,background:color,boxShadow:`0 0 5px ${color}55`,transition:'width 0.5s'}}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── CHART LINE (SVG) ─────────────────────────────────────────────────────────
+function ChartLine({weeks,series,height=148}){
+  if(!weeks||weeks.length<2)return(
+    <div style={{height,display:'flex',alignItems:'center',justifyContent:'center',color:'#2a2a3a',fontSize:12}}>
+      Saisie au moins 2 semaines pour voir l'évolution
+    </div>
+  );
+  const allVals=series.flatMap(s=>s.data).filter(v=>v!=null&&isFinite(v));
+  if(!allVals.length)return null;
+  const rawMin=Math.min(...allVals);
+  const rawMax=Math.max(...allVals);
+  const pad_pct=0.08;
+  const min=rawMin<0?rawMin*(1+pad_pct):Math.min(0,rawMin);
+  const max=rawMax*(1+pad_pct)||1;
+  const range=max-min||1;
+  const W=600,H=height;
+  const pl=44,pr=14,pt=14,pb=28;
+  const iW=W-pl-pr,iH=H-pt-pb;
+  const xPos=i=>pl+(i/(Math.max(weeks.length-1,1)))*iW;
+  const yPos=v=>pt+iH-(((v-min)/range)*iH);
+
+  const smoothPath=data=>{
+    const pts=data.map((v,i)=>[xPos(i),yPos(v!=null?v:min)]);
+    if(pts.length===0)return'';
+    if(pts.length===1)return`M${pts[0][0]},${pts[0][1]}`;
+    let d=`M${pts[0][0]},${pts[0][1]}`;
+    for(let i=1;i<pts.length;i++){
+      const mx=(pts[i-1][0]+pts[i][0])/2;
+      d+=` C${mx},${pts[i-1][1]} ${mx},${pts[i][1]} ${pts[i][0]},${pts[i][1]}`;
+    }
+    return d;
+  };
+
+  const areaPath=data=>{
+    const line=smoothPath(data);
+    if(!line)return'';
+    const last=data.length-1;
+    return line+` L${xPos(last)},${pt+iH} L${pl},${pt+iH} Z`;
+  };
+
+  const fmtY=v=>{
+    const a=Math.abs(v);
+    const s=a>=10000?(Math.round(a/1000))+'k':a>=1000?(Math.round(a/100)/10)+'k':Math.round(a)+'';
+    return(v<0?'–':'')+s;
+  };
+
+  const yTicks=[0,0.25,0.5,0.75,1];
+  const n=weeks.length;
+  const showEvery=n>12?3:n>6?2:1;
+
+  return(
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height,display:'block'}} xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        {series.map((s,i)=>(
+          <linearGradient key={i} id={`lcg${i}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={s.color} stopOpacity="0.28"/>
+            <stop offset="100%" stopColor={s.color} stopOpacity="0.01"/>
+          </linearGradient>
+        ))}
+      </defs>
+      {/* Y grid */}
+      {yTicks.map((t,ti)=>{
+        const y=pt+iH*(1-t);
+        const v=min+range*t;
+        return(
+          <g key={ti}>
+            <line x1={pl} x2={W-pr} y1={y} y2={y} stroke="rgba(255,255,255,0.045)" strokeWidth={1} strokeDasharray={t>0?'3,5':''}/>
+            <text x={pl-5} y={y+4} textAnchor="end" fontSize={9} fill="#2d2d40">{fmtY(v)}</text>
+          </g>
+        );
+      })}
+      {/* Zero line */}
+      {min<0&&<line x1={pl} x2={W-pr} y1={yPos(0)} y2={yPos(0)} stroke="rgba(255,255,255,0.14)" strokeWidth={1}/>}
+      {/* X labels */}
+      {weeks.map((w,i)=>{
+        if(i%showEvery!==0&&i!==n-1)return null;
+        return<text key={w} x={xPos(i)} y={H-6} textAnchor="middle" fontSize={8} fill="#252535">S{w.split('-W')[1]}</text>;
+      })}
+      {/* Areas */}
+      {series.map((s,i)=>(
+        <path key={'a'+i} d={areaPath(s.data)} fill={`url(#lcg${i})`}/>
+      ))}
+      {/* Lines */}
+      {series.map((s,i)=>(
+        <path key={'l'+i} d={smoothPath(s.data)} fill="none" stroke={s.color} strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round"/>
+      ))}
+      {/* Last dot */}
+      {series.map((s,i)=>{
+        const last=s.data[s.data.length-1];
+        if(last==null)return null;
+        return(
+          <g key={'ld'+i}>
+            <circle cx={xPos(s.data.length-1)} cy={yPos(last)} r={5} fill={s.color} stroke="#07070f" strokeWidth={2}/>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ─── BOUTIQUE BAR STAT ────────────────────────────────────────────────────────
+function BoutiqueBar({bStats,accessor,formatter,colorFn,label,borderColor}){
+  const vals=bStats.map(b=>accessor(b.m)||0);
+  const max=Math.max(...vals.map(Math.abs))||1;
+  return(
+    <div style={{padding:'16px 18px',borderRadius:18,border:`1px solid ${borderColor||'rgba(255,255,255,0.07)'}`,background:'rgba(255,255,255,0.02)'}}>
+      <div style={{fontSize:10,color:'#444',fontWeight:700,textTransform:'uppercase',letterSpacing:1,marginBottom:12}}>{label}</div>
+      {bStats.map((b,i)=>{
+        const v=vals[i];
+        const pct=Math.max(0,Math.min(100,(Math.abs(v)/max)*100));
+        const c=colorFn?colorFn(v):b.color;
+        return(
+          <div key={b.id} style={{marginBottom:i<bStats.length-1?9:0}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:4,alignItems:'center'}}>
+              <span style={{fontSize:11,color:'#666'}}>{b.icon} {b.name.length>13?b.name.slice(0,13)+'…':b.name}</span>
+              <span style={{fontSize:12,fontWeight:700,color:c}}>{formatter(v)}</span>
+            </div>
+            <div style={{height:5,borderRadius:3,background:'rgba(255,255,255,0.05)'}}>
+              <div style={{height:'100%',width:`${pct}%`,borderRadius:3,background:c,boxShadow:`0 0 6px ${c}44`,transition:'width 0.6s ease'}}/>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── WEEK PICKER ──────────────────────────────────────────────────────────────
+function WeekPicker({value,onChange,dataWeeks=[]}){
+  const[open,setOpen]=useState(false);
+  const[viewDate,setViewDate]=useState(()=>{
+    if(value){
+      const[y,w]=value.split('-W').map(Number);
+      const jan4=new Date(y,0,4);const s=new Date(jan4);
+      s.setDate(jan4.getDate()-((jan4.getDay()+6)%7)+(w-1)*7);
+      return new Date(s.getFullYear(),s.getMonth(),1);
+    }
+    const n=new Date();return new Date(n.getFullYear(),n.getMonth(),1);
+  });
+  const ref=useRef(null);
+
+  useEffect(()=>{
+    if(!open)return;
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener('mousedown',h);
+    return()=>document.removeEventListener('mousedown',h);
+  },[open]);
+
+  const calWeeks=useMemo(()=>{
+    const year=viewDate.getFullYear(),month=viewDate.getMonth();
+    const firstDay=new Date(year,month,1);
+    const start=new Date(firstDay);
+    start.setDate(firstDay.getDate()-((firstDay.getDay()+6)%7));
+    const result=[];let d=new Date(start);
+    for(let w=0;w<6;w++){
+      const days=[];
+      for(let i=0;i<7;i++){days.push(new Date(d));d.setDate(d.getDate()+1);}
+      if(days.some(day=>day.getMonth()===month)){
+        result.push({key:weekKey(days[0]),days});
+      }
+    }
+    return result;
+  },[viewDate]);
+
+  const today=new Date();
+  const todayKey=weekKey(today);
+  const monthName=viewDate.toLocaleDateString('fr-FR',{month:'long',year:'numeric'});
+  const btnStyle=(active)=>({width:32,height:32,borderRadius:9,border:`1px solid rgba(255,255,255,${active?0.15:0.07})`,background:`rgba(255,255,255,${active?0.08:0.03})`,color:active?'#ccc':'#555',fontSize:16,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s'});
+
+  return(
+    <div ref={ref} style={{position:'relative',userSelect:'none'}}>
+      {/* Trigger */}
+      <button onClick={()=>setOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 18px',borderRadius:14,border:`1px solid ${open?'rgba(139,92,246,0.55)':'rgba(255,255,255,0.1)'}`,background:open?'rgba(139,92,246,0.1)':'rgba(255,255,255,0.05)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',transition:'all 0.15s',outline:'none'}}>
+        <span style={{fontSize:15}}>📅</span>
+        <div style={{textAlign:'left'}}>
+          <div style={{fontSize:12,fontWeight:800,color:'#fff'}}>{value}</div>
+          <div style={{fontSize:10,color:'#555',fontWeight:500}}>{weekLabel(value)}</div>
+        </div>
+        <span style={{fontSize:9,color:'#444',marginLeft:6}}>{open?'▲':'▼'}</span>
+      </button>
+
+      {/* Popup calendar */}
+      {open&&(
+        <div style={{position:'absolute',top:'calc(100% + 10px)',right:0,zIndex:9999,background:'#0b0b18',border:'1px solid rgba(139,92,246,0.22)',borderRadius:20,padding:'18px 16px',width:340,boxShadow:'0 24px 70px rgba(0,0,0,0.7), 0 0 0 1px rgba(139,92,246,0.08)',animation:'fadeSlide 0.15s ease'}}>
+
+          {/* Month navigation */}
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+            <button style={btnStyle(true)} onClick={()=>setViewDate(d=>new Date(d.getFullYear(),d.getMonth()-1,1))}>‹</button>
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:13,fontWeight:800,color:'#fff',textTransform:'capitalize'}}>{monthName}</div>
+            </div>
+            <button style={btnStyle(true)} onClick={()=>setViewDate(d=>new Date(d.getFullYear(),d.getMonth()+1,1))}>›</button>
+          </div>
+
+          {/* Day-of-week headers */}
+          <div style={{display:'grid',gridTemplateColumns:'52px repeat(7,1fr)',gap:2,marginBottom:5,paddingBottom:8,borderBottom:'1px solid rgba(255,255,255,0.05)'}}>
+            <div style={{fontSize:8,color:'#2a2a40',fontWeight:700,textAlign:'center'}}>SEM.</div>
+            {['L','M','M','J','V','S','D'].map((d,i)=>(
+              <div key={i} style={{fontSize:9,color:i>=5?'#3a3a55':'#2a2a40',fontWeight:700,textAlign:'center',padding:'2px 0'}}>{d}</div>
+            ))}
+          </div>
+
+          {/* Week rows */}
+          <div style={{display:'flex',flexDirection:'column',gap:2}}>
+            {calWeeks.map(w=>{
+              const isSel=w.key===value;
+              const isCurr=w.key===todayKey;
+              const hasData=dataWeeks.includes(w.key);
+              const vMonth=viewDate.getMonth();
+              return(
+                <div key={w.key} onClick={()=>{onChange(w.key);setOpen(false);}}
+                  style={{display:'grid',gridTemplateColumns:'52px repeat(7,1fr)',gap:2,borderRadius:11,cursor:'pointer',border:`1px solid ${isSel?'rgba(139,92,246,0.5)':isCurr?'rgba(16,185,129,0.25)':'transparent'}`,background:isSel?'rgba(139,92,246,0.18)':'transparent',transition:'all 0.1s',padding:'2px'}}
+                  onMouseEnter={e=>{if(!isSel)e.currentTarget.style.background='rgba(255,255,255,0.04)';}}
+                  onMouseLeave={e=>{if(!isSel)e.currentTarget.style.background='transparent';}}>
+                  {/* Week number */}
+                  <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'4px 2px',gap:2}}>
+                    <span style={{fontSize:9,fontWeight:900,color:isSel?'#a78bfa':isCurr?'#10b981':'#2a2a40',letterSpacing:0.3}}>W{w.key.split('-W')[1]}</span>
+                    {hasData&&<div style={{width:4,height:4,borderRadius:'50%',background:isSel?'#a78bfa':'#10b981',boxShadow:isSel?'0 0 4px #a78bfa88':'0 0 4px #10b98188'}}/>}
+                  </div>
+                  {/* Days */}
+                  {w.days.map((day,i)=>{
+                    const isToday=day.toDateString()===today.toDateString();
+                    const inMonth=day.getMonth()===vMonth;
+                    const isWeekend=i>=5;
+                    return(
+                      <div key={i} style={{textAlign:'center',padding:'5px 2px',fontSize:11,fontWeight:isToday?900:500,color:isToday?'#10b981':isSel?'#c4b5fd':inMonth?isWeekend?'#4a4a6a':'#777':'#1e1e30',borderRadius:7,background:isToday?'rgba(16,185,129,0.15)':'transparent'}}>
+                        {day.getDate()}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div style={{marginTop:12,display:'flex',gap:8,justifyContent:'center'}}>
+            <button onClick={()=>{const n=new Date();setViewDate(new Date(n.getFullYear(),n.getMonth(),1));onChange(todayKey);setOpen(false);}}
+              style={{padding:'6px 14px',borderRadius:8,border:'1px solid rgba(16,185,129,0.3)',background:'rgba(16,185,129,0.08)',color:'#10b981',fontSize:11,fontWeight:700,cursor:'pointer'}}>
+              Semaine actuelle
+            </button>
+            <button onClick={()=>{const n=new Date();setViewDate(new Date(n.getFullYear(),n.getMonth()-1,1));}}
+              style={{padding:'6px 14px',borderRadius:8,border:'1px solid rgba(255,255,255,0.07)',background:'rgba(255,255,255,0.03)',color:'#444',fontSize:11,fontWeight:600,cursor:'pointer'}}>
+              Mois préc.
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SAISIE VIEW ──────────────────────────────────────────────────────────────
+// Toggle switch component
+function Toggle({on,onChange,color='#8b5cf6',disabled}){
+  return(
+    <div onClick={()=>!disabled&&onChange(!on)} style={{width:38,height:20,borderRadius:10,background:on?color:'rgba(255,255,255,0.08)',border:`1px solid ${on?color+'88':'rgba(255,255,255,0.1)'}`,position:'relative',cursor:disabled?'not-allowed':'pointer',transition:'all 0.2s',flexShrink:0}}>
+      <div style={{position:'absolute',top:2,left:on?18:2,width:14,height:14,borderRadius:'50%',background:on?'#fff':'#444',transition:'left 0.2s',boxShadow:on?`0 0 6px ${color}66`:'none'}}/>
+    </div>
+  );
+}
+
+// Emoji quick-picker
+const QUICK_ICONS=['💡','📌','🏷️','💳','📱','🖥️','🏭','🤝','✈️','🎪','📣','💬','🔧','⚡','🌍','🧩','💼','🎯','📊','🏆','💎','🔑','🚀','🌟','📦','🛠️','💰','📈','🎁','🔔'];
+
+function EmojiPicker({value,onChange}){
+  const[open,setOpen]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{
+    if(!open)return;
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);
+  },[open]);
+  return(
+    <div ref={ref} style={{position:'relative'}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{width:38,height:36,borderRadius:9,border:`1px solid ${open?'rgba(139,92,246,0.5)':'rgba(255,255,255,0.1)'}`,background:open?'rgba(139,92,246,0.1)':'rgba(255,255,255,0.04)',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        {value||'🔷'}
+      </button>
+      {open&&(
+        <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:9999,background:'#0d0d1a',border:'1px solid rgba(139,92,246,0.25)',borderRadius:14,padding:'10px',display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:4,width:220,boxShadow:'0 16px 50px rgba(0,0,0,0.6)'}}>
+          {QUICK_ICONS.map(e=>(
+            <button key={e} onClick={()=>{onChange(e);setOpen(false);}} style={{width:30,height:30,borderRadius:7,border:`1px solid ${value===e?'rgba(139,92,246,0.5)':'transparent'}`,background:value===e?'rgba(139,92,246,0.15)':'rgba(255,255,255,0.03)',fontSize:16,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>{e}</button>
+          ))}
+          {/* Custom text input */}
+          <input value={value} onChange={e=>onChange(e.target.value)} placeholder="✏️" maxLength={4}
+            style={{gridColumn:'span 6',marginTop:4,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:7,padding:'5px 8px',color:'#fff',fontSize:13,outline:'none',textAlign:'center'}}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SECTION_META={
+  revenus: {label:'💰 Revenus',   color:'#10b981'},
+  charges: {label:'💸 Charges',   color:'#ef4444'},
+  trafic:  {label:'📊 Trafic',    color:'#3b82f6'},
+  clients: {label:'👥 Clients',   color:'#f59e0b'},
+};
+
+function SaisieView({boutiques,data,setData,fieldConfig,setFieldConfig,customFields,setCustomFields,fieldOrder,setFieldOrder}){
+  const[currentWeek,setCurrentWeek]=useState(weekKey(new Date()));
+  const[expanded,setExpanded]=useState(()=>boutiques.reduce((a,b)=>({...a,[b.id]:true}),{}));
+  const[configMode,setConfigMode]=useState({});
+  const[newField,setNewField]=useState({});
+  const[drag,setDrag]=useState(null);     // {bid,sec,fid}
+  const[dragOver,setDragOver]=useState(null); // {bid,sec,fid}
+
+  // ── Ordered fields helpers ───────────────────────────────────────────────────
+  const getSectionOrder=(bid,sec)=>{
+    const builtIn=FIELDS.filter(f=>f.section===sec).map(f=>f.id);
+    const custom=(customFields[bid]||[]).filter(f=>f.section===sec).map(f=>f.id);
+    const all=[...builtIn,...custom];
+    const saved=fieldOrder[bid]?.[sec];
+    if(!saved)return all;
+    const merged=saved.filter(id=>all.includes(id));
+    all.forEach(id=>{if(!merged.includes(id))merged.push(id);});
+    return merged;
+  };
+  const getOrderedFields=(bid,sec)=>{
+    const order=getSectionOrder(bid,sec);
+    const allF=[...FIELDS,...(customFields[bid]||[])];
+    return order.map(id=>allF.find(f=>f.id===id)).filter(Boolean);
+  };
+
+  // ── Drag handlers ────────────────────────────────────────────────────────────
+  const onDragStart=(bid,sec,fid,e)=>{
+    setDrag({bid,sec,fid});
+    e.dataTransfer.effectAllowed='move';
+    // ghost image
+    const el=e.currentTarget.cloneNode(true);
+    el.style.cssText='position:fixed;top:-999px;opacity:0.85;borderRadius:9px;';
+    document.body.appendChild(el);
+    e.dataTransfer.setDragImage(el,0,0);
+    setTimeout(()=>document.body.removeChild(el),0);
+  };
+  const onDragOver=(bid,sec,fid,e)=>{
+    e.preventDefault();
+    e.dataTransfer.dropEffect='move';
+    if(!drag||drag.bid!==bid||drag.sec!==sec||drag.fid===fid)return;
+    setDragOver({bid,sec,fid});
+  };
+  const onDrop=(bid,sec,fid)=>{
+    if(!drag||drag.bid!==bid||drag.sec!==sec||drag.fid===fid)return;
+    const order=getSectionOrder(bid,sec);
+    const arr=[...order];
+    const fi=arr.indexOf(drag.fid),ti=arr.indexOf(fid);
+    if(fi<0||ti<0)return;
+    arr.splice(fi,1);arr.splice(ti,0,drag.fid);
+    setFieldOrder(prev=>({...prev,[bid]:{...(prev[bid]||{}),[sec]:arr}}));
+    setDrag(null);setDragOver(null);
+  };
+  const onDragEnd=()=>{setDrag(null);setDragOver(null);};
+
+  const dataWeeks=useMemo(()=>{
+    const s=new Set();
+    boutiques.forEach(b=>Object.entries(data[b.id]||{}).forEach(([w,d])=>{if(+d.ca)s.add(w);}));
+    return Array.from(s);
+  },[boutiques,data]);
+
+  const getCfg=bid=>fieldConfig[bid]||DEFAULT_FIELDS();
+  const toggleField=(bid,fid)=>setFieldConfig(prev=>{
+    const cfg={...getCfg(bid)};
+    if(FIELDS.find(f=>f.id===fid)?.required)return prev;
+    cfg[fid]=!cfg[fid];
+    return{...prev,[bid]:cfg};
+  });
+  const toggleCustomField=(bid,fid)=>setFieldConfig(prev=>{
+    const cfg={...getCfg(bid)};
+    cfg[fid]=cfg[fid]===false?true:false;
+    return{...prev,[bid]:cfg};
+  });
+  const setAll=(bid,val)=>{
+    const cfs=customFields[bid]||[];
+    setFieldConfig(prev=>{
+      const cfg={
+        ...Object.fromEntries(FIELDS.map(f=>[f.id,f.required?true:val])),
+        ...Object.fromEntries(cfs.map(f=>[f.id,val])),
+      };
+      return{...prev,[bid]:cfg};
+    });
+  };
+
+  // Add a custom field to a boutique
+  const addCustomField=(bid)=>{
+    const nf=newField[bid]||{};
+    if(!nf.label?.trim())return;
+    const id='cf_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+    const field={
+      id,
+      label:nf.label.trim(),
+      icon:nf.icon||'💡',
+      hint:nf.hint||'€',
+      section:nf.section||'charges',
+      isCharge:nf.isCharge||false,
+    };
+    setCustomFields(prev=>({...prev,[bid]:[...(prev[bid]||[]),field]}));
+    // Enable it by default in fieldConfig
+    setFieldConfig(prev=>({...prev,[bid]:{...getCfg(bid),[id]:true}}));
+    setNewField(p=>({...p,[bid]:{label:'',icon:'💡',hint:'€',section:'charges',isCharge:false}}));
+  };
+
+  const deleteCustomField=(bid,fid)=>{
+    setCustomFields(prev=>({...prev,[bid]:(prev[bid]||[]).filter(f=>f.id!==fid)}));
+    setFieldConfig(prev=>{const cfg={...getCfg(bid)};delete cfg[fid];return{...prev,[bid]:cfg};});
+    setData(prev=>{
+      const next={...prev};
+      if(next[bid])Object.keys(next[bid]).forEach(w=>{if(next[bid][w])delete next[bid][w][fid];});
+      return next;
+    });
+  };
+
+  const setVal=(bid,field,val)=>setData(prev=>{
+    const next={...prev};
+    if(!next[bid])next[bid]={};
+    if(!next[bid][currentWeek])next[bid][currentWeek]=EMPTY();
+    next[bid][currentWeek]={...next[bid][currentWeek],[field]:val};
+    return next;
+  });
+
+  // Extended calc: adds custom charge fields to autres
+  const calcWith=(raw,bid)=>{
+    const cfs=(customFields[bid]||[]).filter(f=>f.isCharge);
+    if(!cfs.length)return calc(raw);
+    const r={...raw};
+    cfs.forEach(f=>{r.autres=(+r.autres||0)+(+r[f.id]||0);});
+    return calc(r);
+  };
+
+  const hint=fid=>['ca','retours','ca_email','ads','fournisseur','livraison','shopify','autres'].includes(fid)?'€':'nb';
+
+  return(
+    <div style={{animation:'fadeSlide 0.2s ease'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
+        <div>
+          <div style={{fontSize:22,fontWeight:900,color:'#fff',marginBottom:4}}>📝 Saisie Hebdomadaire</div>
+          <div style={{fontSize:13,color:'#444'}}>Personnalise les champs actifs par boutique · Données auto-sauvegardées</div>
+        </div>
+        <WeekPicker value={currentWeek} onChange={setCurrentWeek} dataWeeks={dataWeeks}/>
+      </div>
+
+      <div style={{padding:'11px 18px',borderRadius:11,background:'rgba(139,92,246,0.08)',border:'1px solid rgba(139,92,246,0.2)',marginBottom:20,fontSize:13,color:'#a78bfa',fontWeight:600}}>
+        📅 {currentWeek} · {weekLabel(currentWeek)}
+      </div>
+
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        {boutiques.map(b=>{
+          const raw=data[b.id]?.[currentWeek]||{};
+          const m=calcWith(raw,b.id);
+          const isOpen=expanded[b.id]!==false;
+          const hasData=+raw.ca>0;
+          const isConf=configMode[b.id]||false;
+          const cfg=getCfg(b.id);
+          const cfs=customFields[b.id]||[];
+          const activeBuiltIn=FIELDS.filter(f=>cfg[f.id]!==false).length;
+          const activeCF=cfs.filter(f=>cfg[f.id]!==false).length;
+          const activeCount=activeBuiltIn+activeCF;
+          const totalCount=FIELDS.length+cfs.length;
+          const nf=newField[b.id]||{label:'',icon:'💡',hint:'€',section:'charges',isCharge:false};
+
+          const sections=['revenus','charges','trafic','clients'];
+
+          return(
+            <div key={b.id} style={{borderRadius:20,border:`1px solid ${b.color}2a`,background:`${b.color}04`,overflow:'hidden'}}>
+
+              {/* Header */}
+              <div style={{display:'flex',alignItems:'center',gap:14,padding:'16px 22px',background:`${b.color}07`,borderBottom:isOpen?`1px solid ${b.color}1a`:'none'}}>
+                <div style={{fontSize:30,cursor:'pointer'}} onClick={()=>setExpanded(p=>({...p,[b.id]:!p[b.id]}))}>{b.icon}</div>
+                <div style={{flex:1,cursor:'pointer'}} onClick={()=>setExpanded(p=>({...p,[b.id]:!p[b.id]}))}>
+                  <div style={{fontSize:16,fontWeight:800,color:'#fff'}}>{b.name}</div>
+                  {hasData&&<div style={{fontSize:11,color:b.color,marginTop:2,fontWeight:600}}>
+                    CA Net {eur(m.ca_net)} · Bénéf {eur(m.benef)} · ROAS {xf(m.roas)} · Conv {pct(m.taux_conversion)}
+                  </div>}
+                </div>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  {hasData&&<span style={{padding:'3px 11px',borderRadius:20,background:`${col.benef(m.benef)}1a`,color:col.benef(m.benef),fontSize:12,fontWeight:700}}>{eur(m.benef)}</span>}
+                  {m.roas&&<span style={{padding:'3px 11px',borderRadius:20,background:`${col.roas(m.roas)}1a`,color:col.roas(m.roas),fontSize:12,fontWeight:700}}>{xf(m.roas)}</span>}
+                  {/* Config toggle button */}
+                  <button onClick={e=>{e.stopPropagation();setConfigMode(p=>({...p,[b.id]:!p[b.id]}));if(!isOpen)setExpanded(p=>({...p,[b.id]:true}));}}
+                    style={{display:'flex',alignItems:'center',gap:5,padding:'5px 11px',borderRadius:10,border:`1px solid ${isConf?b.color+'66':'rgba(255,255,255,0.08)'}`,background:isConf?b.color+'18':'rgba(255,255,255,0.04)',color:isConf?b.color:'#444',fontSize:11,fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
+                    ⚙ <span style={{fontSize:10}}>{activeCount}/{totalCount}</span>
+                    {cfs.length>0&&<span style={{padding:'1px 6px',borderRadius:8,background:b.color+'22',color:b.color,fontSize:9}}>+{cfs.length}</span>}
+                  </button>
+                  <span onClick={()=>setExpanded(p=>({...p,[b.id]:!p[b.id]}))} style={{fontSize:16,color:'#444',transform:isOpen?'rotate(90deg)':'none',transition:'transform 0.2s',display:'block',cursor:'pointer'}}>›</span>
+                </div>
+              </div>
+
+              {isOpen&&(
+                <div style={{padding:'18px 22px'}}>
+
+                  {/* ── CONFIG PANEL ── */}
+                  {isConf&&(
+                    <div style={{marginBottom:20,borderRadius:16,border:`1px solid ${b.color}33`,background:`${b.color}07`,padding:'16px 18px',animation:'fadeSlide 0.15s ease'}}>
+
+                      {/* Config header */}
+                      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+                        <div style={{fontSize:12,fontWeight:800,color:b.color,textTransform:'uppercase',letterSpacing:1}}>⚙ Champs · {b.name}</div>
+                        <div style={{display:'flex',gap:7}}>
+                          <button onClick={()=>setAll(b.id,true)} style={{padding:'5px 13px',borderRadius:8,border:'1px solid rgba(16,185,129,0.3)',background:'rgba(16,185,129,0.1)',color:'#10b981',fontSize:11,fontWeight:700,cursor:'pointer'}}>✓ Tout activer</button>
+                          <button onClick={()=>setAll(b.id,false)} style={{padding:'5px 13px',borderRadius:8,border:'1px solid rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.07)',color:'#ef4444',fontSize:11,fontWeight:700,cursor:'pointer'}}>✕ Tout désactiver</button>
+                        </div>
+                      </div>
+
+                      {/* Built-in fields grid */}
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:16}}>
+                        {sections.map(sec=>{
+                          const meta=SECTION_META[sec];
+                          const secFields=FIELDS.filter(f=>f.section===sec);
+                          const secCustom=cfs.filter(f=>f.section===sec);
+                          return(
+                            <div key={sec}>
+                              <div style={{fontSize:9,fontWeight:800,color:meta.color,textTransform:'uppercase',letterSpacing:1.5,marginBottom:7,display:'flex',alignItems:'center',gap:5}}>
+                                <div style={{height:1,width:8,background:meta.color,opacity:0.5}}/>{meta.label}
+                              </div>
+                              <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                                {getOrderedFields(b.id,sec).map(f=>{
+                                  const isCustom=!!(customFields[b.id]||[]).find(cf=>cf.id===f.id);
+                                  const on=cfg[f.id]!==false;
+                                  const isDragging=drag?.fid===f.id&&drag?.bid===b.id;
+                                  const isOver=dragOver?.fid===f.id&&dragOver?.bid===b.id;
+                                  const color=isCustom?b.color:meta.color;
+                                  return(
+                                    <div key={f.id}
+                                      draggable
+                                      onDragStart={e=>onDragStart(b.id,sec,f.id,e)}
+                                      onDragOver={e=>onDragOver(b.id,sec,f.id,e)}
+                                      onDrop={()=>onDrop(b.id,sec,f.id)}
+                                      onDragEnd={onDragEnd}
+                                      style={{display:'flex',alignItems:'center',gap:7,padding:'6px 9px',borderRadius:9,
+                                        border:`1px solid ${isOver?color+'77':on?color+'2a':'rgba(255,255,255,0.05)'}`,
+                                        background:isDragging?'rgba(255,255,255,0.06)':isOver?color+'14':on?color+'08':'rgba(255,255,255,0.02)',
+                                        transition:'border 0.1s,background 0.1s',opacity:isDragging?0.4:1,
+                                        cursor:'grab',userSelect:'none',
+                                        boxShadow:isOver?`0 0 0 2px ${color}44`:'none'}}>
+                                      {/* Drag handle */}
+                                      <span style={{fontSize:11,color:'#333',letterSpacing:-1,flexShrink:0}}>⠿</span>
+                                      <span style={{fontSize:12}}>{f.icon}</span>
+                                      <span style={{flex:1,fontSize:10,color:on?'#ccc':'#3a3a4a',fontWeight:on?600:400,lineHeight:1.2}}>{f.label}</span>
+                                      {isCustom&&<span style={{fontSize:8,padding:'1px 5px',borderRadius:5,background:'rgba(139,92,246,0.2)',color:'#a78bfa',fontWeight:700}}>{f.hint}{f.isCharge?' ⚖':''}</span>}
+                                      {f.required
+                                        ?<span style={{fontSize:8,color:'#444',fontWeight:700}}>requis</span>
+                                        :isCustom
+                                          ?<><Toggle on={on} onChange={()=>toggleCustomField(b.id,f.id)} color={color}/>
+                                            <button onClick={e=>{e.stopPropagation();deleteCustomField(b.id,f.id);}}
+                                              style={{width:18,height:18,borderRadius:4,border:'1px solid rgba(239,68,68,0.25)',background:'rgba(239,68,68,0.08)',color:'#ef4444',fontSize:10,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>✕</button></>
+                                          :<Toggle on={on} onChange={()=>toggleField(b.id,f.id)} color={color}/>
+                                      }
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* ── ADD CUSTOM FIELD FORM ── */}
+                      <div style={{borderRadius:13,border:'1px solid rgba(139,92,246,0.22)',background:'rgba(139,92,246,0.05)',padding:'14px 16px'}}>
+                        <div style={{fontSize:10,fontWeight:800,color:'#a78bfa',textTransform:'uppercase',letterSpacing:1,marginBottom:11}}>+ Créer un champ personnalisé</div>
+                        <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap'}}>
+                          {/* Emoji */}
+                          <div>
+                            <div style={{fontSize:9,color:'#444',fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:1}}>Icône</div>
+                            <EmojiPicker value={nf.icon||'💡'} onChange={v=>setNewField(p=>({...p,[b.id]:{...(p[b.id]||{}),icon:v}}))}/>
+                          </div>
+                          {/* Label */}
+                          <div style={{flex:2,minWidth:130}}>
+                            <div style={{fontSize:9,color:'#444',fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:1}}>Nom du champ</div>
+                            <input value={nf.label||''} onChange={e=>setNewField(p=>({...p,[b.id]:{...(p[b.id]||{}),label:e.target.value}}))}
+                              onKeyDown={e=>e.key==='Enter'&&addCustomField(b.id)}
+                              placeholder="ex: TikTok Ads, Retrait espèces…"
+                              style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:9,padding:'8px 11px',color:'#fff',fontSize:12,outline:'none',fontFamily:'inherit'}}/>
+                          </div>
+                          {/* Section */}
+                          <div>
+                            <div style={{fontSize:9,color:'#444',fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:1}}>Section</div>
+                            <select value={nf.section||'charges'} onChange={e=>setNewField(p=>({...p,[b.id]:{...(p[b.id]||{}),section:e.target.value}}))}
+                              style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:9,padding:'8px 10px',color:'#fff',fontSize:12,cursor:'pointer',outline:'none',height:36}}>
+                              <option value="revenus" style={{background:'#1a1a2e'}}>💰 Revenus</option>
+                              <option value="charges" style={{background:'#1a1a2e'}}>💸 Charges</option>
+                              <option value="trafic"  style={{background:'#1a1a2e'}}>📊 Trafic</option>
+                              <option value="clients" style={{background:'#1a1a2e'}}>👥 Clients</option>
+                            </select>
+                          </div>
+                          {/* Hint €/nb */}
+                          <div>
+                            <div style={{fontSize:9,color:'#444',fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:1}}>Unité</div>
+                            <select value={nf.hint||'€'} onChange={e=>setNewField(p=>({...p,[b.id]:{...(p[b.id]||{}),hint:e.target.value}}))}
+                              style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:9,padding:'8px 10px',color:'#fff',fontSize:12,cursor:'pointer',outline:'none',height:36}}>
+                              <option value="€" style={{background:'#1a1a2e'}}>€ euros</option>
+                              <option value="nb" style={{background:'#1a1a2e'}}># nombre</option>
+                              <option value="%" style={{background:'#1a1a2e'}}>% pourcent</option>
+                            </select>
+                          </div>
+                          {/* Is charge toggle */}
+                          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                            <div style={{fontSize:9,color:'#444',fontWeight:700,textTransform:'uppercase',letterSpacing:1}}>Charge ⚖</div>
+                            <Toggle on={nf.isCharge||false} onChange={v=>setNewField(p=>({...p,[b.id]:{...(p[b.id]||{}),isCharge:v}}))} color="#ef4444"/>
+                          </div>
+                          {/* Submit */}
+                          <button onClick={()=>addCustomField(b.id)}
+                            style={{padding:'8px 18px',borderRadius:9,border:'none',background:'linear-gradient(135deg,#8b5cf6,#6366f1)',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',height:36,whiteSpace:'nowrap'}}
+                            onMouseEnter={e=>e.target.style.opacity='0.85'} onMouseLeave={e=>e.target.style.opacity='1'}>
+                            + Créer
+                          </button>
+                        </div>
+                        {nf.isCharge&&<div style={{marginTop:8,fontSize:10,color:'#f59e0b'}}>⚖ Ce champ sera automatiquement inclus dans le Total Charges et le calcul de bénéfice.</div>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── INPUT GRID (only active fields) ── */}
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:18,marginBottom:20}}>
+                    {sections.map(sec=>{
+                      const meta=SECTION_META[sec];
+                      const ordered=getOrderedFields(b.id,sec).filter(f=>cfg[f.id]!==false);
+                      if(!ordered.length)return null;
+                      return(
+                        <div key={sec}>
+                          <SectionTitle color={meta.color}>{meta.label}</SectionTitle>
+                          <div style={{display:'flex',flexDirection:'column',gap:9}}>
+                            {ordered.map(f=>{
+                              const isCustom=!!(cfs.find(cf=>cf.id===f.id));
+                              const isDragging=drag?.fid===f.id&&drag?.bid===b.id;
+                              const isOver=dragOver?.fid===f.id&&dragOver?.bid===b.id&&drag?.sec===sec;
+                              return(
+                                <div key={f.id}
+                                  draggable
+                                  onDragStart={e=>onDragStart(b.id,sec,f.id,e)}
+                                  onDragOver={e=>onDragOver(b.id,sec,f.id,e)}
+                                  onDrop={()=>onDrop(b.id,sec,f.id)}
+                                  onDragEnd={onDragEnd}
+                                  style={{display:'flex',alignItems:'center',gap:6,opacity:isDragging?0.3:1,
+                                    borderRadius:9,border:`1px solid ${isOver?meta.color+'55':'transparent'}`,
+                                    background:isOver?meta.color+'0a':'transparent',
+                                    boxShadow:isOver?`0 0 0 2px ${meta.color}33`:'none',
+                                    transition:'border 0.1s,background 0.1s',
+                                    cursor:'default',position:'relative'}}>
+                                  <span style={{fontSize:13,color:'#252535',cursor:'grab',flexShrink:0,userSelect:'none',lineHeight:1,letterSpacing:-1}}>⠿</span>
+                                  <div style={{flex:1}}>
+                                    <Inp label={f.label} icon={f.icon} hint={isCustom?f.hint:hint(f.id)} value={raw[f.id]} onChange={v=>setVal(b.id,f.id,v)}/>
+                                  </div>
+                                  {isCustom&&f.isCharge&&<span style={{position:'absolute',top:2,right:4,fontSize:8,color:'#ef4444',fontWeight:700}}>⚖</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {/* Section mini-summary */}
+                          {sec==='revenus'&&hasData&&(
+                            <div style={{marginTop:11,padding:'10px 12px',borderRadius:10,background:'rgba(16,185,129,0.08)',border:'1px solid rgba(16,185,129,0.15)'}}>
+                              <div style={{fontSize:9,color:'#555',marginBottom:4,fontWeight:700,textTransform:'uppercase',letterSpacing:1}}>CA Net</div>
+                              <div style={{fontSize:20,fontWeight:900,color:'#10b981'}}>{eur(m.ca_net)}</div>
+                              {m.taux_retour>0&&<div style={{fontSize:10,color:col.retour(m.taux_retour),marginTop:2}}>Taux retour : {pct(m.taux_retour)}</div>}
+                            </div>
+                          )}
+                          {sec==='charges'&&hasData&&(
+                            <div style={{marginTop:11,padding:'10px 12px',borderRadius:10,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.15)'}}>
+                              <div style={{fontSize:9,color:'#555',marginBottom:4,fontWeight:700,textTransform:'uppercase',letterSpacing:1}}>Total Charges</div>
+                              <div style={{fontSize:20,fontWeight:900,color:'#ef4444'}}>{eur(m.total_charges)}</div>
+                              {m.part_ads&&<div style={{fontSize:10,color:'#888',marginTop:2}}>Part ads : {pct(m.part_ads)} du CA</div>}
+                            </div>
+                          )}
+                          {sec==='trafic'&&m.taux_conversion&&(
+                            <div style={{marginTop:11,padding:'10px 12px',borderRadius:10,background:'rgba(59,130,246,0.08)',border:'1px solid rgba(59,130,246,0.15)'}}>
+                              <div style={{fontSize:9,color:'#555',marginBottom:4,fontWeight:700,textTransform:'uppercase',letterSpacing:1}}>Taux de conversion</div>
+                              <div style={{fontSize:20,fontWeight:900,color:col.conv(m.taux_conversion)}}>{pct(m.taux_conversion)}</div>
+                              {m.taux_abandon_panier&&<div style={{fontSize:10,color:col.abandon(m.taux_abandon_panier),marginTop:2}}>Abandon : {pct(m.taux_abandon_panier)}</div>}
+                            </div>
+                          )}
+                          {sec==='clients'&&+raw.sessions>0&&(
+                            <div style={{marginTop:11}}>
+                              <SectionTitle color="#6366f1">Funnel</SectionTitle>
+                              <FunnelBar label="Sessions" value={+raw.sessions||0} max={+raw.sessions||1} color="#3b82f6"/>
+                              <FunnelBar label="Ajouts panier" value={+raw.ajouts_panier||0} max={+raw.sessions||1} color="#8b5cf6"/>
+                              <FunnelBar label="Commandes" value={+raw.commandes||0} max={+raw.sessions||1} color="#10b981"/>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Métriques calculées */}
+                  {hasData&&(
+                    <div>
+                      <div style={{height:1,background:'rgba(255,255,255,0.05)',marginBottom:14}}/>
+                      <div style={{fontSize:9,color:'#444',fontWeight:700,textTransform:'uppercase',letterSpacing:1.5,marginBottom:10}}>⚡ Métriques calculées en temps réel</div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:8,marginBottom:8}}>
+                        <KPI label="Bénéfice Net" value={eur(m.benef)} color={col.benef(m.benef)} icon="💰"/>
+                        <KPI label="ROAS" value={xf(m.roas)} color={col.roas(m.roas)} icon="🎯"/>
+                        <KPI label="ROAS Net" value={xf(m.roas_net)} color={col.roas(m.roas_net)} icon="📊"/>
+                        <KPI label="Marge Brute" value={pct(m.taux_marge_brute)} color={col.marge(m.taux_marge_brute)} icon="📈"/>
+                        <KPI label="Taux Bénéf." value={pct(m.taux_benef)} color={col.benef(m.benef)} icon="💹"/>
+                        <KPI label="CPA" value={eur(m.cpa)} color="#3b82f6" icon="🎯"/>
+                        <KPI label="AOV" value={eur(m.aov)} color="#a78bfa" icon="🛍️"/>
+                        <KPI label="ROI" value={pct(m.roi)} color={col.roi(m.roi)} icon="🏆"/>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:8}}>
+                        <KPI label="Conversion" value={pct(m.taux_conversion)} color={col.conv(m.taux_conversion)} icon="🔁"/>
+                        <KPI label="Abandon panier" value={pct(m.taux_abandon_panier)} color={col.abandon(m.taux_abandon_panier)} icon="🛒"/>
+                        <KPI label="Tx ajout panier" value={pct(m.taux_ajout_panier)} color="#6366f1" icon="➕"/>
+                        <KPI label="Taux retour" value={pct(m.taux_retour)} color={col.retour(m.taux_retour)} icon="↩️"/>
+                        <KPI label="Rev. / visite" value={eur(m.revenu_par_visite,2)} color="#10b981" icon="👁"/>
+                        <KPI label="CTR Ads" value={pct(m.ctr)} color="#3b82f6" icon="🖱"/>
+                        <KPI label="CPC" value={eur(m.cpc,2)} color="#f59e0b" icon="💶"/>
+                        <KPI label="Part Email" value={pct(m.part_email_ca)} color="#ec4899" icon="📧"/>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── DASHBOARD ────────────────────────────────────────────────────────────────
+function DashboardView({boutiques,data}){
+  const allRows=useMemo(()=>{
+    const r=[];boutiques.forEach(b=>Object.values(data[b.id]||{}).forEach(d=>{if(+d.ca)r.push(d);}));
+    return r;
+  },[boutiques,data]);
+  const G=sumCalc(allRows);
+  const hasData=allRows.length>0;
+
+  const allWeeks=useMemo(()=>{const s=new Set();boutiques.forEach(b=>Object.keys(data[b.id]||{}).forEach(w=>s.add(w)));return Array.from(s).sort();},[boutiques,data]);
+  const lastWeek=allWeeks[allWeeks.length-1];
+  const LW=useMemo(()=>{
+    if(!lastWeek)return null;
+    const rows=boutiques.flatMap(b=>{const d=data[b.id]?.[lastWeek];return d&&+d.ca?[d]:[];});
+    return sumCalc(rows);
+  },[lastWeek,boutiques,data]);
+
+  const bStats=boutiques.map(b=>{
+    const rows=Object.values(data[b.id]||{}).filter(d=>+d.ca);
+    return{...b,m:sumCalc(rows),weeks:rows.length};
+  });
+
+  // Chart data — per week, all boutiques combined
+  const chartWeeks=useMemo(()=>allWeeks.slice(-20),[allWeeks]);
+  const weeklyCA=useMemo(()=>chartWeeks.map(w=>{
+    const rows=boutiques.flatMap(b=>{const d=data[b.id]?.[w];return d&&+d.ca?[d]:[];});
+    return rows.length?sumCalc(rows).ca_net:null;
+  }),[chartWeeks,boutiques,data]);
+  const weeklyBenef=useMemo(()=>chartWeeks.map(w=>{
+    const rows=boutiques.flatMap(b=>{const d=data[b.id]?.[w];return d&&+d.ca?[d]:[];});
+    return rows.length?sumCalc(rows).benef:null;
+  }),[chartWeeks,boutiques,data]);
+  const weeklyAds=useMemo(()=>chartWeeks.map(w=>{
+    const rows=boutiques.flatMap(b=>{const d=data[b.id]?.[w];return d&&+d.ca?[d]:[];});
+    return rows.length?sumCalc(rows).ads:null;
+  }),[chartWeeks,boutiques,data]);
+
+  // Per boutique weekly CA
+  const boutiquesWeekly=useMemo(()=>boutiques.map(b=>({
+    ...b,
+    data:chartWeeks.map(w=>{const d=data[b.id]?.[w];return d&&+d.ca?calc(d).ca_net:null;})
+  })),[boutiques,chartWeeks,data]);
+
+  if(!hasData)return(
+    <div style={{textAlign:'center',padding:'80px 40px',borderRadius:24,border:'1px solid rgba(255,255,255,0.06)',background:'rgba(255,255,255,0.02)'}}>
+      <div style={{fontSize:48,marginBottom:16}}>💡</div>
+      <div style={{fontSize:18,fontWeight:700,color:'#ccc',marginBottom:8}}>Aucune donnée encore</div>
+      <div style={{fontSize:14,color:'#444'}}>Va dans <span style={{color:'#a78bfa',fontWeight:700}}>Saisie</span> pour renseigner ta première semaine.</div>
+    </div>
+  );
+
+  return(
+    <div style={{animation:'fadeSlide 0.2s ease'}}>
+      <div style={{marginBottom:28}}>
+        <div style={{fontSize:28,fontWeight:900,color:'#fff',marginBottom:4}}>Bonjour Léo 💰</div>
+        <div style={{fontSize:14,color:'#444'}}>{allWeeks.length} semaines · {boutiques.length} boutiques · 💾 Auto-sauvegardé en localStorage</div>
+      </div>
+
+      {/* Tier 1 KPIs */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:12}}>
+        <KPI size="lg" label="CA Net Total" value={eur(G.ca_net)} color="#10b981" icon="💵"/>
+        <KPI size="lg" label="Bénéfice Net" value={eur(G.benef)} color={col.benef(G.benef)} icon="💰"/>
+        <KPI size="lg" label="ROAS Global" value={xf(G.roas)} color={col.roas(G.roas)} icon="🎯"/>
+        <KPI size="lg" label="Marge Brute" value={pct(G.taux_marge_brute)} color={col.marge(G.taux_marge_brute)} icon="📈"/>
+        <KPI size="lg" label="ROI Global" value={pct(G.roi)} color={col.roi(G.roi)} icon="🏆"/>
+      </div>
+
+      {/* Tier 2 KPIs */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:10,marginBottom:10}}>
+        <KPI label="CA Brut" value={eur(G.ca)} color="#059669" icon="💵"/>
+        <KPI label="Total Retours" value={eur(G.retours)} color={col.retour(G.taux_retour)} icon="↩️"/>
+        <KPI label="Total Ads" value={eur(G.ads)} color="#ef4444" icon="🎯"/>
+        <KPI label="Total Fournisseur" value={eur(G.fournisseur)} color="#f59e0b" icon="📦"/>
+        <KPI label="Taux Conversion" value={pct(G.taux_conversion)} color={col.conv(G.taux_conversion)} icon="🔁"/>
+        <KPI label="Abandon Panier" value={pct(G.taux_abandon_panier)} color={col.abandon(G.taux_abandon_panier)} icon="🛒"/>
+        <KPI label="AOV Moyen" value={eur(G.aov)} color="#a78bfa" icon="🛍️"/>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:10,marginBottom:28}}>
+        <KPI label="ROAS Net" value={xf(G.roas_net)} color={col.roas(G.roas_net)} icon="📊"/>
+        <KPI label="CPA Moyen" value={eur(G.cpa)} color="#3b82f6" icon="🖱"/>
+        <KPI label="Taux Bénéf. Net" value={pct(G.taux_benef)} color={col.benef(G.benef)} icon="💹"/>
+        <KPI label="Taux Retour" value={pct(G.taux_retour)} color={col.retour(G.taux_retour)} icon="↩️"/>
+        <KPI label="Rev. / Visite" value={eur(G.revenu_par_visite,2)} color="#10b981" icon="👁"/>
+        <KPI label="Part Email CA" value={pct(G.part_email_ca)} color="#ec4899" icon="📧"/>
+        <KPI label="Total Commandes" value={nf(G.commandes)} color="#6366f1" icon="✅"/>
+      </div>
+
+      {/* ── CHARTS ── */}
+      {chartWeeks.length>=2&&(
+        <div style={{marginBottom:28}}>
+          <SectionTitle color="#3b82f6">📈 Évolution hebdomadaire</SectionTitle>
+
+          {/* Main line chart: CA Net + Bénéfice + Ads */}
+          <div style={{padding:'20px 22px',borderRadius:20,border:'1px solid rgba(59,130,246,0.13)',background:'rgba(59,130,246,0.03)',marginBottom:14}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#aaa'}}>{chartWeeks.length} dernières semaines — CA · Bénéfice · Ads</div>
+              <div style={{display:'flex',gap:18}}>
+                {[{label:'CA Net',color:'#10b981'},{label:'Bénéfice',color:'#8b5cf6'},{label:'Ads',color:'#ef4444'}].map(s=>(
+                  <div key={s.label} style={{display:'flex',alignItems:'center',gap:6}}>
+                    <div style={{width:14,height:3,background:s.color,borderRadius:2}}/>
+                    <span style={{fontSize:10,color:'#444'}}>{s.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <ChartLine
+              weeks={chartWeeks}
+              series={[
+                {label:'CA Net',color:'#10b981',data:weeklyCA},
+                {label:'Bénéfice',color:'#8b5cf6',data:weeklyBenef},
+                {label:'Ads',color:'#ef4444',data:weeklyAds},
+              ]}
+              height={155}
+            />
+          </div>
+
+          {/* Per-boutique CA line chart */}
+          {boutiques.length>1&&(
+            <div style={{padding:'20px 22px',borderRadius:20,border:'1px solid rgba(255,255,255,0.06)',background:'rgba(255,255,255,0.015)',marginBottom:14}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+                <div style={{fontSize:13,fontWeight:700,color:'#aaa'}}>CA Net par boutique</div>
+                <div style={{display:'flex',gap:16}}>
+                  {boutiques.map(b=>(
+                    <div key={b.id} style={{display:'flex',alignItems:'center',gap:6}}>
+                      <div style={{width:14,height:3,background:b.color,borderRadius:2}}/>
+                      <span style={{fontSize:10,color:'#444'}}>{b.icon} {b.name.length>12?b.name.slice(0,12)+'…':b.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <ChartLine
+                weeks={chartWeeks}
+                series={boutiquesWeekly.map(b=>({label:b.name,color:b.color,data:b.data}))}
+                height={130}
+              />
+            </div>
+          )}
+
+          {/* 3-col boutique comparison bars */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
+            <BoutiqueBar
+              bStats={bStats} label="ROAS par boutique"
+              accessor={m=>m.roas} formatter={xf} colorFn={col.roas}
+              borderColor="rgba(59,130,246,0.12)"
+            />
+            <BoutiqueBar
+              bStats={bStats} label="Marge brute % par boutique"
+              accessor={m=>m.taux_marge_brute} formatter={v=>pct(v)} colorFn={col.marge}
+              borderColor="rgba(16,185,129,0.12)"
+            />
+            <BoutiqueBar
+              bStats={bStats} label="Bénéfice net par boutique"
+              accessor={m=>m.benef} formatter={eur} colorFn={col.benef}
+              borderColor="rgba(139,92,246,0.12)"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Dernière semaine */}
+      {LW&&+LW.ca>0&&(
+        <div style={{marginBottom:24,padding:'18px 22px',borderRadius:20,border:'1px solid rgba(139,92,246,0.25)',background:'rgba(139,92,246,0.05)'}}>
+          <div style={{fontSize:9,color:'#a78bfa',fontWeight:800,textTransform:'uppercase',letterSpacing:1.5,marginBottom:12}}>⚡ Dernière semaine — {lastWeek} · {weekLabel(lastWeek)}</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',gap:8}}>
+            {[
+              {l:'CA Net',v:eur(LW.ca_net),c:'#10b981'},
+              {l:'Bénéfice',v:eur(LW.benef),c:col.benef(LW.benef)},
+              {l:'ROAS',v:xf(LW.roas),c:col.roas(LW.roas)},
+              {l:'Marge brute',v:pct(LW.taux_marge_brute),c:col.marge(LW.taux_marge_brute)},
+              {l:'Conversion',v:pct(LW.taux_conversion),c:col.conv(LW.taux_conversion)},
+              {l:'Abandon',v:pct(LW.taux_abandon_panier),c:col.abandon(LW.taux_abandon_panier)},
+              {l:'CPA',v:eur(LW.cpa),c:'#3b82f6'},
+              {l:'AOV',v:eur(LW.aov),c:'#a78bfa'},
+            ].map(k=>(
+              <div key={k.l} style={{textAlign:'center'}}>
+                <div style={{fontSize:16,fontWeight:900,color:k.c,marginBottom:4}}>{k.v}</div>
+                <div style={{fontSize:9,color:'#444',textTransform:'uppercase',letterSpacing:0.8}}>{k.l}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Boutiques */}
+      <SectionTitle color="#f59e0b">🏪 Performance par boutique — All time</SectionTitle>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14}}>
+        {bStats.map(b=>(
+          <div key={b.id} style={{padding:'20px 22px',borderRadius:20,border:`1px solid ${b.color}2a`,background:`${b.color}06`}}>
+            <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}>
+              <div style={{fontSize:30}}>{b.icon}</div>
+              <div><div style={{fontSize:14,fontWeight:800,color:'#fff'}}>{b.name}</div>
+              <div style={{fontSize:11,color:b.color,fontWeight:600,marginTop:2}}>{b.weeks} semaines</div></div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
+              <div><div style={{fontSize:15,fontWeight:900,color:'#10b981'}}>{eur(b.m.ca_net)}</div><div style={{fontSize:9,color:'#444'}}>CA NET</div></div>
+              <div><div style={{fontSize:15,fontWeight:900,color:col.benef(b.m.benef)}}>{eur(b.m.benef)}</div><div style={{fontSize:9,color:'#444'}}>BÉNÉFICE</div></div>
+              <div><div style={{fontSize:15,fontWeight:900,color:col.roas(b.m.roas)}}>{xf(b.m.roas)}</div><div style={{fontSize:9,color:'#444'}}>ROAS</div></div>
+              <div><div style={{fontSize:15,fontWeight:900,color:col.conv(b.m.taux_conversion)}}>{pct(b.m.taux_conversion)}</div><div style={{fontSize:9,color:'#444'}}>CONV.</div></div>
+              <div><div style={{fontSize:15,fontWeight:900,color:col.marge(b.m.taux_marge_brute)}}>{pct(b.m.taux_marge_brute)}</div><div style={{fontSize:9,color:'#444'}}>MARGE</div></div>
+              <div><div style={{fontSize:15,fontWeight:900,color:'#3b82f6'}}>{eur(b.m.cpa)}</div><div style={{fontSize:9,color:'#444'}}>CPA</div></div>
+            </div>
+            {b.m.sessions>0&&(
+              <div>
+                <FunnelBar label={`${nf(b.m.sessions)} sessions`} value={b.m.sessions} max={b.m.sessions} color={b.color}/>
+                <FunnelBar label={`${nf(b.m.ajouts_panier)} ajouts (${pct(b.m.taux_ajout_panier)})`} value={b.m.ajouts_panier} max={b.m.sessions} color={b.color+'bb'}/>
+                <FunnelBar label={`${nf(b.m.commandes)} cmd (${pct(b.m.taux_conversion)})`} value={b.m.commandes} max={b.m.sessions} color={b.color+'77'}/>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── BOUTIQUE DETAIL ──────────────────────────────────────────────────────────
+function BoutiqueDetailView({boutique,data}){
+  const bid=boutique.id;
+  const weeks=Object.keys(data[bid]||{}).filter(w=>+data[bid][w]?.ca||+data[bid][w]?.ads).sort().reverse();
+  if(!weeks.length)return<div style={{textAlign:'center',padding:60,color:'#444',fontSize:15}}>Aucune donnée pour {boutique.name}. Commence dans Saisie.</div>;
+  const rows=weeks.map(w=>({week:w,...calc(data[bid][w]||{}),raw:data[bid][w]||{}}));
+  const tot=sumCalc(rows.map(r=>r.raw));
+
+  return(
+    <div style={{animation:'fadeSlide 0.2s ease'}}>
+      <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:22,padding:'18px 22px',borderRadius:20,border:`1px solid ${boutique.color}33`,background:`${boutique.color}07`}}>
+        <div style={{fontSize:40}}>{boutique.icon}</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:20,fontWeight:900,color:'#fff'}}>{boutique.name}</div>
+          <div style={{fontSize:12,color:boutique.color,marginTop:3,fontWeight:600}}>{weeks.length} semaines de données</div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:16,textAlign:'right'}}>
+          {[
+            {l:'CA Net',v:eur(tot.ca_net),c:'#10b981'},
+            {l:'Bénéfice',v:eur(tot.benef),c:col.benef(tot.benef)},
+            {l:'ROAS',v:xf(tot.roas),c:col.roas(tot.roas)},
+            {l:'Conversion',v:pct(tot.taux_conversion),c:col.conv(tot.taux_conversion)},
+            {l:'Abandon',v:pct(tot.taux_abandon_panier),c:col.abandon(tot.taux_abandon_panier)},
+          ].map(k=>(
+            <div key={k.l}><div style={{fontSize:20,fontWeight:900,color:k.c}}>{k.v}</div><div style={{fontSize:9,color:'#555',textTransform:'uppercase',letterSpacing:1}}>{k.l}</div></div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{borderRadius:16,border:'1px solid rgba(255,255,255,0.07)',overflow:'auto'}}>
+        <table style={{borderCollapse:'collapse',minWidth:2000}}>
+          <thead>
+            <tr style={{background:'rgba(10,10,20,0.98)',position:'sticky',top:0}}>
+              {[
+                {l:'Semaine',g:'#fff'},{l:'Sessions',g:'#3b82f6'},{l:'Ajouts 🛒',g:'#6366f1'},{l:'Cmds',g:'#8b5cf6'},{l:'Conv%',g:'#8b5cf6'},{l:'AOV',g:'#a78bfa'},{l:'Abandon%',g:'#f59e0b'},
+                {l:'CA Brut',g:'#059669'},{l:'Retours',g:'#ef4444'},{l:'CA Net',g:'#10b981'},
+                {l:'Ads',g:'#ef4444'},{l:'Fourn.',g:'#f59e0b'},{l:'Livr.',g:'#666'},{l:'Shopify',g:'#666'},{l:'Autres',g:'#666'},{l:'Total ch.',g:'#ef4444'},
+                {l:'M.Brute €',g:'#10b981'},{l:'Marge%',g:'#10b981'},{l:'Bénéf.',g:'#10b981'},{l:'Bénéf%',g:'#10b981'},
+                {l:'ROAS',g:'#3b82f6'},{l:'ROAS Net',g:'#3b82f6'},{l:'CPA',g:'#3b82f6'},{l:'ROI',g:'#6366f1'},
+                {l:'Rev/vis.',g:'#555'},{l:'Impr.',g:'#555'},{l:'Clics',g:'#555'},{l:'CTR',g:'#555'},{l:'CPC',g:'#555'},
+                {l:'CA Email',g:'#ec4899'},{l:'% Email',g:'#ec4899'},{l:'Nvx clients',g:'#f59e0b'},{l:'Récurr.',g:'#f59e0b'},
+              ].map((h,i)=>(
+                <th key={i} style={{padding:'9px 9px',textAlign:i===0?'left':'right',fontSize:8,fontWeight:700,color:h.g,textTransform:'uppercase',letterSpacing:0.7,borderBottom:'1px solid rgba(255,255,255,0.07)',whiteSpace:'nowrap',minWidth:i===0?110:70}}>
+                  {h.l}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r,i)=>{
+              const rowStyle={borderBottom:i<rows.length-1?'1px solid rgba(255,255,255,0.035)':'none',transition:'background 0.1s'};
+              const td=(v,c,fw=600,fs=12)=><td style={{padding:'9px',textAlign:'right',fontSize:fs,fontWeight:fw,color:c,whiteSpace:'nowrap'}}>{v}</td>;
+              return(
+                <tr key={r.week} style={rowStyle}
+                  onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.02)'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <td style={{padding:'9px',whiteSpace:'nowrap'}}>
+                    <div style={{fontSize:11,fontWeight:700,color:'#ccc'}}>{r.week}</div>
+                    <div style={{fontSize:9,color:'#444',marginTop:1}}>{weekLabel(r.week)}</div>
+                  </td>
+                  {td(nf(r.sessions),'#3b82f6')}
+                  {td(nf(r.ajouts_panier),'#6366f1')}
+                  {td(nf(r.commandes),'#8b5cf6')}
+                  {td(pct(r.taux_conversion),col.conv(r.taux_conversion),700)}
+                  {td(eur(r.aov),'#a78bfa')}
+                  {td(pct(r.taux_abandon_panier),col.abandon(r.taux_abandon_panier),700)}
+                  {td(eur(r.ca),'#059669')}
+                  {td(eur(r.retours),col.retour(r.taux_retour))}
+                  {td(eur(r.ca_net),'#10b981',800,13)}
+                  {td(eur(r.ads),'#ef4444')}
+                  {td(eur(r.fournisseur),'#f59e0b')}
+                  {td(eur(r.livraison),'#555')}
+                  {td(eur(r.shopify),'#555')}
+                  {td(eur(r.autres),'#555')}
+                  {td(eur(r.total_charges),'#ef4444',700)}
+                  {td(eur(r.marge_brute),col.marge(r.taux_marge_brute),700)}
+                  {td(pct(r.taux_marge_brute),col.marge(r.taux_marge_brute),700)}
+                  {td(eur(r.benef),col.benef(r.benef),800,13)}
+                  {td(pct(r.taux_benef),col.benef(r.benef),700)}
+                  {td(xf(r.roas),col.roas(r.roas),700)}
+                  {td(xf(r.roas_net),col.roas(r.roas_net),700)}
+                  {td(eur(r.cpa),'#3b82f6')}
+                  {td(pct(r.roi),col.roi(r.roi),700)}
+                  {td(eur(r.revenu_par_visite,2),'#555')}
+                  {td(nf(r.impressions),'#555')}
+                  {td(nf(r.clics),'#555')}
+                  {td(pct(r.ctr),'#555')}
+                  {td(eur(r.cpc,2),'#555')}
+                  {td(eur(r.ca_email),'#ec4899')}
+                  {td(pct(r.part_email_ca),'#ec4899')}
+                  {td(nf(r.nouveaux_clients),'#f59e0b')}
+                  {td(nf(r.clients_recurrents),'#f59e0b')}
+                </tr>
+              );
+            })}
+            <tr style={{background:`${boutique.color}08`,borderTop:`1px solid ${boutique.color}33`}}>
+              <td style={{padding:'11px 9px',fontSize:11,fontWeight:800,color:boutique.color}}>TOTAL / MOY.</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:'#3b82f6'}}>{nf(tot.sessions)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:'#6366f1'}}>{nf(tot.ajouts_panier)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:'#8b5cf6'}}>{nf(tot.commandes)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:col.conv(tot.taux_conversion)}}>{pct(tot.taux_conversion)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:'#a78bfa'}}>{eur(tot.aov)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:col.abandon(tot.taux_abandon_panier)}}>{pct(tot.taux_abandon_panier)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:13,fontWeight:900,color:'#059669'}}>{eur(tot.ca)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:col.retour(tot.taux_retour)}}>{eur(tot.retours)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:14,fontWeight:900,color:'#10b981'}}>{eur(tot.ca_net)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:13,fontWeight:900,color:'#ef4444'}}>{eur(tot.ads)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:13,fontWeight:900,color:'#f59e0b'}}>{eur(tot.fournisseur)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,color:'#666'}}>{eur(tot.livraison)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,color:'#666'}}>{eur(tot.shopify)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,color:'#666'}}>{eur(tot.autres)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:13,fontWeight:900,color:'#ef4444'}}>{eur(tot.total_charges)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:13,fontWeight:900,color:col.marge(tot.taux_marge_brute)}}>{eur(tot.marge_brute)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:col.marge(tot.taux_marge_brute)}}>{pct(tot.taux_marge_brute)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:14,fontWeight:900,color:col.benef(tot.benef)}}>{eur(tot.benef)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:col.benef(tot.benef)}}>{pct(tot.taux_benef)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:13,fontWeight:900,color:col.roas(tot.roas)}}>{xf(tot.roas)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:13,fontWeight:900,color:col.roas(tot.roas_net)}}>{xf(tot.roas_net)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:'#3b82f6'}}>{eur(tot.cpa)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:col.roi(tot.roi)}}>{pct(tot.roi)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,color:'#666'}}>{eur(tot.revenu_par_visite,2)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,color:'#666'}}>{nf(tot.impressions)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,color:'#666'}}>{nf(tot.clics)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,color:'#666'}}>{pct(tot.ctr)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,color:'#666'}}>{eur(tot.cpc,2)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:'#ec4899'}}>{eur(tot.ca_email)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,color:'#ec4899'}}>{pct(tot.part_email_ca)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:'#f59e0b'}}>{nf(tot.nouveaux_clients)}</td>
+              <td style={{padding:'11px 9px',textAlign:'right',fontSize:12,fontWeight:800,color:'#f59e0b'}}>{nf(tot.clients_recurrents)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ─── MENSUEL VIEW ─────────────────────────────────────────────────────────────
+function MensuelView({boutiques,data,abonnements,setAbonnements}){
+  const[sel,setSel]=useState('all');
+  const[aboOpen,setAboOpen]=useState({});
+  const[newAbo,setNewAbo]=useState({});
+
+  const allWeeks=useMemo(()=>{const s=new Set();boutiques.forEach(b=>Object.keys(data[b.id]||{}).forEach(w=>s.add(w)));return Array.from(s).sort();},[boutiques,data]);
+  const months=useMemo(()=>{const m={};allWeeks.forEach(w=>{const k=weekToMonth(w);if(!m[k])m[k]=[];m[k].push(w);});return Object.entries(m).sort((a,b)=>b[0].localeCompare(a[0]));},[allWeeks]);
+
+  const getData=(bid,weeks)=>{
+    const rows=[];
+    if(bid==='all')boutiques.forEach(b=>weeks.forEach(w=>{const d=data[b.id]?.[w];if(d&&+d.ca)rows.push(d);}));
+    else weeks.forEach(w=>{const d=data[bid]?.[w];if(d&&+d.ca)rows.push(d);});
+    return sumCalc(rows);
+  };
+
+  const getAboTotal=month=>(abonnements[month]||[]).reduce((s,a)=>s+(+a.montant||0),0);
+
+  const addAbo=month=>{
+    const a=newAbo[month]||{};
+    if(!a.nom?.trim()||!+a.montant)return;
+    const item={id:Date.now()+'_'+Math.random().toString(36).slice(2),nom:a.nom.trim(),montant:+a.montant};
+    setAbonnements(prev=>({...prev,[month]:[...(prev[month]||[]),item]}));
+    setNewAbo(p=>({...p,[month]:{nom:'',montant:''}}));
+  };
+
+  const delAbo=(month,id)=>setAbonnements(prev=>({...prev,[month]:(prev[month]||[]).filter(a=>a.id!==id)}));
+
+  if(!months.length)return<div style={{textAlign:'center',padding:'80px 40px',color:'#444',fontSize:15}}>Aucune donnée encore.</div>;
+  const bobj=boutiques.find(b=>b.id===sel);
+  const ac=sel==='all'?'#8b5cf6':bobj?.color||'#8b5cf6';
+
+  return(
+    <div style={{animation:'fadeSlide 0.2s ease'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
+        <div>
+          <div style={{fontSize:22,fontWeight:900,color:'#fff',marginBottom:4}}>📅 Vue Mensuelle</div>
+          <div style={{fontSize:13,color:'#444'}}>Agrégation automatique · Abonnements & charges fixes déductibles</div>
+        </div>
+        <select value={sel} onChange={e=>setSel(e.target.value)}
+          style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:12,padding:'10px 16px',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',outline:'none'}}>
+          <option value="all" style={{background:'#1a1a2e'}}>🌐 Toutes les boutiques</option>
+          {boutiques.map(b=><option key={b.id} value={b.id} style={{background:'#1a1a2e'}}>{b.icon} {b.name}</option>)}
+        </select>
+      </div>
+
+      {months.map(([month,weeks])=>{
+        const m=getData(sel,weeks);
+        if(!m.ca&&!m.ads)return null;
+        const aboTotal=getAboTotal(month);
+        const benefAjuste=m.benef!=null?m.benef-aboTotal:null;
+        const aboList=abonnements[month]||[];
+        const isAboOpen=aboOpen[month]!==false;// default open
+        const na=newAbo[month]||{nom:'',montant:''};
+
+        return(
+          <div key={month} style={{marginBottom:20,borderRadius:20,border:`1px solid ${ac}2a`,background:`${ac}04`,overflow:'hidden'}}>
+            {/* Month header */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 22px',borderBottom:`1px solid ${ac}18`,background:`${ac}07`}}>
+              <div>
+                <div style={{fontSize:17,fontWeight:800,color:'#fff',textTransform:'capitalize'}}>{monthLabel(month)}</div>
+                <div style={{fontSize:10,color:'#444',marginTop:2}}>{weeks.length} semaines · Sem. {weeks.map(w=>w.split('-W')[1]).join(', ')}</div>
+              </div>
+              <div style={{display:'flex',gap:20,alignItems:'center'}}>
+                <div style={{textAlign:'right'}}><div style={{fontSize:22,fontWeight:900,color:'#10b981'}}>{eur(m.ca_net)}</div><div style={{fontSize:9,color:'#555'}}>CA NET</div></div>
+                <div style={{textAlign:'right'}}>
+                  <div style={{fontSize:22,fontWeight:900,color:col.benef(m.benef)}}>{eur(m.benef)}</div>
+                  <div style={{fontSize:9,color:'#555'}}>BÉNÉF. BRUT</div>
+                </div>
+                {aboTotal>0&&(
+                  <div style={{textAlign:'right'}}>
+                    <div style={{fontSize:22,fontWeight:900,color:col.benef(benefAjuste)}}>{eur(benefAjuste)}</div>
+                    <div style={{fontSize:9,color:'#ef4444'}}>BÉNÉF. NET (–{eur(aboTotal)} abo.)</div>
+                  </div>
+                )}
+                <div style={{textAlign:'right'}}><div style={{fontSize:22,fontWeight:900,color:col.roas(m.roas)}}>{xf(m.roas)}</div><div style={{fontSize:9,color:'#555'}}>ROAS</div></div>
+              </div>
+            </div>
+
+            <div style={{padding:'16px 22px'}}>
+              {/* KPIs */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:8,marginBottom:8}}>
+                <KPI label="Marge Brute" value={pct(m.taux_marge_brute)} color={col.marge(m.taux_marge_brute)}/>
+                <KPI label="Taux Bénéf." value={pct(m.taux_benef)} color={col.benef(m.benef)}/>
+                <KPI label="Conversion" value={pct(m.taux_conversion)} color={col.conv(m.taux_conversion)}/>
+                <KPI label="Abandon panier" value={pct(m.taux_abandon_panier)} color={col.abandon(m.taux_abandon_panier)}/>
+                <KPI label="Taux retour" value={pct(m.taux_retour)} color={col.retour(m.taux_retour)}/>
+                <KPI label="ROI" value={pct(m.roi)} color={col.roi(m.roi)}/>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:8,marginBottom:14}}>
+                <KPI label="CPA" value={eur(m.cpa)} color="#3b82f6"/>
+                <KPI label="AOV" value={eur(m.aov)} color="#a78bfa"/>
+                <KPI label="ROAS Net" value={xf(m.roas_net)} color={col.roas(m.roas_net)}/>
+                <KPI label="Part Email" value={pct(m.part_email_ca)} color="#ec4899"/>
+                <KPI label="Commandes" value={nf(m.commandes)} color="#8b5cf6"/>
+                <KPI label="Rev./visite" value={eur(m.revenu_par_visite,2)} color="#10b981"/>
+              </div>
+
+              {m.sessions>0&&(
+                <div style={{marginBottom:14,padding:'11px 14px',borderRadius:11,background:'rgba(255,255,255,0.025)'}}>
+                  <div style={{fontSize:9,color:'#444',fontWeight:700,marginBottom:8,textTransform:'uppercase',letterSpacing:1}}>Funnel mensuel</div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14}}>
+                    <FunnelBar label={`${nf(m.sessions)} sessions`} value={m.sessions} max={m.sessions} color={ac}/>
+                    <FunnelBar label={`${nf(m.ajouts_panier)} ajouts (${pct(m.taux_ajout_panier)})`} value={m.ajouts_panier} max={m.sessions} color={ac+'bb'}/>
+                    <FunnelBar label={`${nf(m.commandes)} cmd (${pct(m.taux_conversion)})`} value={m.commandes} max={m.sessions} color={ac+'77'}/>
+                  </div>
+                </div>
+              )}
+
+              {/* ── ABONNEMENTS ── */}
+              <div style={{borderRadius:14,border:'1px solid rgba(239,68,68,0.18)',background:'rgba(239,68,68,0.04)',overflow:'hidden'}}>
+                {/* Header row */}
+                <div onClick={()=>setAboOpen(p=>({...p,[month]:!isAboOpen}))}
+                  style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',cursor:'pointer',borderBottom:isAboOpen?'1px solid rgba(239,68,68,0.1)':'none'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{fontSize:14}}>🔄</span>
+                    <span style={{fontSize:11,fontWeight:700,color:'#ef4444',textTransform:'uppercase',letterSpacing:1}}>Abonnements & Charges fixes</span>
+                    {aboList.length>0&&<span style={{padding:'2px 8px',borderRadius:20,background:'rgba(239,68,68,0.15)',color:'#ef4444',fontSize:10,fontWeight:700}}>{aboList.length} poste{aboList.length>1?'s':''}</span>}
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:14}}>
+                    {aboTotal>0&&(
+                      <div style={{textAlign:'right'}}>
+                        <div style={{fontSize:14,fontWeight:900,color:'#ef4444'}}>–{eur(aboTotal)}</div>
+                        <div style={{fontSize:8,color:'#555'}}>TOTAL MENSUEL</div>
+                      </div>
+                    )}
+                    <span style={{fontSize:14,color:'#333',transform:isAboOpen?'rotate(90deg)':'none',transition:'transform 0.2s',display:'block'}}>›</span>
+                  </div>
+                </div>
+
+                {isAboOpen&&(
+                  <div style={{padding:'14px 16px'}}>
+                    {/* List */}
+                    {aboList.length>0&&(
+                      <div style={{marginBottom:12}}>
+                        {aboList.map(a=>(
+                          <div key={a.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 10px',borderRadius:9,background:'rgba(255,255,255,0.03)',marginBottom:5,border:'1px solid rgba(255,255,255,0.06)'}}>
+                            <div style={{flex:1,fontSize:12,color:'#bbb',fontWeight:500}}>{a.nom}</div>
+                            <div style={{fontSize:13,fontWeight:700,color:'#ef4444'}}>–{eur(+a.montant)}</div>
+                            <button onClick={()=>delAbo(month,a.id)}
+                              style={{padding:'3px 9px',borderRadius:6,border:'1px solid rgba(239,68,68,0.2)',background:'rgba(239,68,68,0.07)',color:'#ef4444',fontSize:10,cursor:'pointer',fontWeight:600}}
+                              onMouseEnter={e=>e.target.style.background='rgba(239,68,68,0.18)'}
+                              onMouseLeave={e=>e.target.style.background='rgba(239,68,68,0.07)'}>
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                        {/* Total sub-row */}
+                        <div style={{display:'flex',justifyContent:'space-between',padding:'8px 10px',borderRadius:9,background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',marginTop:4}}>
+                          <span style={{fontSize:11,color:'#888',fontWeight:700}}>Total abonnements</span>
+                          <span style={{fontSize:13,fontWeight:900,color:'#ef4444'}}>–{eur(aboTotal)}</span>
+                        </div>
+                        {m.benef!=null&&(
+                          <div style={{display:'flex',justifyContent:'space-between',padding:'8px 10px',borderRadius:9,background:col.benef(benefAjuste)+'12',border:`1px solid ${col.benef(benefAjuste)}33`,marginTop:4}}>
+                            <span style={{fontSize:11,color:'#888',fontWeight:700}}>🎯 Bénéfice net ajusté</span>
+                            <span style={{fontSize:14,fontWeight:900,color:col.benef(benefAjuste)}}>{eur(benefAjuste)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Add form */}
+                    <div style={{display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap'}}>
+                      <div style={{flex:2,minWidth:140}}>
+                        <div style={{fontSize:9,color:'#555',fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:1}}>Nom de l'abonnement</div>
+                        <input
+                          value={na.nom}
+                          onChange={e=>setNewAbo(p=>({...p,[month]:{...na,nom:e.target.value}}))}
+                          onKeyDown={e=>e.key==='Enter'&&addAbo(month)}
+                          placeholder="ex: Shopify Basic, Klaviyo, Pack Canva…"
+                          style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:9,padding:'8px 11px',color:'#fff',fontSize:12,outline:'none',fontFamily:'inherit'}}
+                        />
+                      </div>
+                      <div style={{flex:1,minWidth:90}}>
+                        <div style={{fontSize:9,color:'#555',fontWeight:700,marginBottom:4,textTransform:'uppercase',letterSpacing:1}}>Montant (€/mois)</div>
+                        <input
+                          type="number" min="0" step="any"
+                          value={na.montant}
+                          onChange={e=>setNewAbo(p=>({...p,[month]:{...na,montant:e.target.value}}))}
+                          onKeyDown={e=>e.key==='Enter'&&addAbo(month)}
+                          placeholder="29"
+                          style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:9,padding:'8px 11px',color:'#fff',fontSize:12,outline:'none',fontFamily:'inherit',MozAppearance:'textfield'}}
+                        />
+                      </div>
+                      <button onClick={()=>addAbo(month)}
+                        style={{padding:'8px 18px',borderRadius:9,border:'none',background:'rgba(239,68,68,0.18)',color:'#ef4444',fontSize:12,fontWeight:700,cursor:'pointer',height:36,whiteSpace:'nowrap'}}
+                        onMouseEnter={e=>e.target.style.background='rgba(239,68,68,0.28)'}
+                        onMouseLeave={e=>e.target.style.background='rgba(239,68,68,0.18)'}>
+                        + Ajouter
+                      </button>
+                    </div>
+
+                    {aboList.length===0&&(
+                      <div style={{marginTop:10,fontSize:11,color:'#2a2a3a',textAlign:'center',padding:'8px 0'}}>
+                        Shopify, Klaviyo, Canva, Google Workspace, logiciels… ajoute tes charges fixes mensuelles ici pour voir ton vrai bénéfice net.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── GESTION ──────────────────────────────────────────────────────────────────
+const COLORS=['#f472b6','#a78bfa','#fbbf24','#34d399','#60a5fa','#f97316','#e879f9','#22d3ee'];
+const ICONS=['🛁','👟','🛍️','👗','🎒','👜','🧴','💍','🎁','🌟'];
+
+function GestionView({boutiques,setBoutiques,data,setData}){
+  const[nom,setNom]=useState('');
+  const[c,setC]=useState(COLORS[0]);
+  const[ic,setIc]=useState(ICONS[0]);
+  const[show,setShow]=useState(false);
+
+  const add=()=>{
+    if(!nom.trim())return;
+    const id='b'+Date.now();
+    setBoutiques(p=>[...p,{id,name:nom.trim(),color:c,icon:ic}]);
+    setNom('');setShow(false);
+  };
+  const del=(id)=>{
+    if(!confirm('Supprimer cette boutique et toutes ses données ?'))return;
+    setBoutiques(p=>p.filter(b=>b.id!==id));
+    setData(p=>{const n={...p};delete n[id];return n;});
+  };
+
+  return(
+    <div style={{animation:'fadeSlide 0.2s ease'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
+        <div>
+          <div style={{fontSize:22,fontWeight:900,color:'#fff',marginBottom:4}}>⚙️ Gestion des Boutiques</div>
+          <div style={{fontSize:13,color:'#444'}}>Ajoute, personnalise ou supprime</div>
+        </div>
+        <button onClick={()=>setShow(s=>!s)} style={{padding:'10px 20px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#8b5cf6,#3b82f6)',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+          {show?'✕ Annuler':'+ Nouvelle boutique'}
+        </button>
+      </div>
+
+      {show&&(
+        <div style={{marginBottom:18,padding:'22px',borderRadius:18,border:'1px solid rgba(139,92,246,0.25)',background:'rgba(139,92,246,0.05)'}}>
+          <div style={{display:'flex',gap:14,flexWrap:'wrap',alignItems:'flex-end'}}>
+            <div style={{flex:1,minWidth:180}}>
+              <div style={{fontSize:10,color:'#555',marginBottom:5,fontWeight:700}}>NOM</div>
+              <input value={nom} onChange={e=>setNom(e.target.value)} placeholder="Nom de la boutique" onKeyDown={e=>e.key==='Enter'&&add()}
+                style={{width:'100%',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:9,padding:'9px 12px',color:'#fff',fontSize:14,outline:'none'}}/>
+            </div>
+            <div>
+              <div style={{fontSize:10,color:'#555',marginBottom:5,fontWeight:700}}>ICÔNE</div>
+              <div style={{display:'flex',gap:4,flexWrap:'wrap',maxWidth:220}}>
+                {ICONS.map(i=><button key={i} onClick={()=>setIc(i)} style={{width:32,height:32,borderRadius:7,border:`1px solid ${ic===i?'rgba(139,92,246,0.6)':'rgba(255,255,255,0.07)'}`,background:ic===i?'rgba(139,92,246,0.18)':'rgba(255,255,255,0.04)',fontSize:15,cursor:'pointer'}}>{i}</button>)}
+              </div>
+            </div>
+            <div>
+              <div style={{fontSize:10,color:'#555',marginBottom:5,fontWeight:700}}>COULEUR</div>
+              <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                {COLORS.map(cl=><button key={cl} onClick={()=>setC(cl)} style={{width:24,height:24,borderRadius:'50%',border:`2px solid ${c===cl?'#fff':'transparent'}`,background:cl,cursor:'pointer',boxShadow:c===cl?`0 0 8px ${cl}88`:'none'}}/>)}
+              </div>
+            </div>
+            <button onClick={add} style={{padding:'9px 22px',borderRadius:9,border:'none',background:'#8b5cf6',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',height:38}}>Créer →</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+        {boutiques.map(b=>{
+          const rows=Object.values(data[b.id]||{}).filter(d=>+d.ca);
+          const tot=sumCalc(rows);
+          return(
+            <div key={b.id} style={{display:'flex',alignItems:'center',gap:18,padding:'18px 22px',borderRadius:17,border:`1px solid ${b.color}2a`,background:`${b.color}06`}}>
+              <div style={{fontSize:36}}>{b.icon}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:16,fontWeight:800,color:'#fff'}}>{b.name}</div>
+                <div style={{fontSize:11,color:'#444',marginTop:2}}>{rows.length} semaines de données</div>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:14,alignItems:'center'}}>
+                {[
+                  {l:'CA Net',v:eur(tot.ca_net),c:'#10b981'},
+                  {l:'Bénéfice',v:eur(tot.benef),c:col.benef(tot.benef)},
+                  {l:'ROAS',v:xf(tot.roas),c:col.roas(tot.roas)},
+                  {l:'Conversion',v:pct(tot.taux_conversion),c:col.conv(tot.taux_conversion)},
+                  {l:'Marge',v:pct(tot.taux_marge_brute),c:col.marge(tot.taux_marge_brute)},
+                ].map(k=>(
+                  <div key={k.l} style={{textAlign:'right'}}>
+                    <div style={{fontSize:15,fontWeight:800,color:k.c}}>{k.v}</div>
+                    <div style={{fontSize:9,color:'#555'}}>{k.l}</div>
+                  </div>
+                ))}
+              </div>
+              <button onClick={()=>del(b.id)} style={{padding:'7px 13px',borderRadius:9,border:'1px solid rgba(239,68,68,0.25)',background:'rgba(239,68,68,0.07)',color:'#ef4444',fontSize:12,fontWeight:700,cursor:'pointer',transition:'all 0.15s',whiteSpace:'nowrap'}}
+                onMouseEnter={e=>e.target.style.background='rgba(239,68,68,0.18)'}
+                onMouseLeave={e=>e.target.style.background='rgba(239,68,68,0.07)'}>
+                Supprimer
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── APP ──────────────────────────────────────────────────────────────────────
+const NAV=[
+  {id:'dashboard',label:'Dashboard',icon:'⬡'},
+  {id:'saisie',label:'Saisie',icon:'📝'},
+  {id:'mensuel',label:'Mensuel',icon:'📅'},
+  {id:'boutiques',label:'Boutiques',icon:'📊'},
+  {id:'gestion',label:'Gérer',icon:'⚙️'},
+];
+
+function App(){
+  const saved=loadState();
+  const[boutiques,setBoutiques]=useState(saved?.boutiques||DEFAULT_BOUTIQUES);
+  const[data,setData]=useState(saved?.data||{});
+  const[abonnements,setAbonnements]=useState(saved?.abonnements||{});
+  const[fieldConfig,setFieldConfig]=useState(saved?.fieldConfig||{});
+  const[customFields,setCustomFields]=useState(saved?.customFields||{});
+  const[fieldOrder,setFieldOrder]=useState(saved?.fieldOrder||{});
+  const[view,setView]=useState('dashboard');
+  const[activeBoutique,setActiveBoutique]=useState(null);
+  const[syncStatus,setSyncStatus]=useState(null);
+
+  // ── Merge API sync data on first load (does NOT overwrite manual fields) ──
+  useEffect(()=>{
+    const S=window.__SYNC_DATA__;
+    if(!S||!S.weeks)return;
+    const merged=mergeSync(saved?.data||{},saved?.boutiques||DEFAULT_BOUTIQUES);
+    if(merged){
+      setData(merged);
+      setSyncStatus({last_sync:S.last_sync,days:S.synced_days?.length||0,boutiques_count:Object.keys(S.weeks).length});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  useEffect(()=>saveState({boutiques,data,abonnements,fieldConfig,customFields,fieldOrder}),[boutiques,data,abonnements,fieldConfig,customFields,fieldOrder]);
+
+  const G=useMemo(()=>{
+    const rows=[];boutiques.forEach(b=>Object.values(data[b.id]||{}).forEach(d=>{if(+d.ca)rows.push(d);}));
+    return sumCalc(rows);
+  },[boutiques,data]);
+
+  const totalWeeks=useMemo(()=>{const s=new Set();boutiques.forEach(b=>Object.keys(data[b.id]||{}).forEach(w=>s.add(w)));return s.size;},[boutiques,data]);
+
+  return(
+    <div style={{minHeight:'100vh',background:'#07070f',color:'#fff',display:'flex',fontFamily:"'Inter',-apple-system,sans-serif",overflow:'hidden',position:'relative'}}>
+      <style>{`
+        @keyframes fadeSlide{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes orb1{0%,100%{transform:translate(0,0)}50%{transform:translate(50px,-30px)}}
+        @keyframes orb2{0%,100%{transform:translate(0,0)}50%{transform:translate(-30px,40px)}}
+      `}</style>
+      <div style={{position:'fixed',top:'-15%',left:'-5%',width:700,height:700,borderRadius:'50%',background:'radial-gradient(circle,rgba(16,185,129,0.07) 0%,transparent 65%)',pointerEvents:'none',animation:'orb1 20s ease-in-out infinite'}}/>
+      <div style={{position:'fixed',bottom:'-20%',right:'-8%',width:600,height:600,borderRadius:'50%',background:'radial-gradient(circle,rgba(139,92,246,0.06) 0%,transparent 65%)',pointerEvents:'none',animation:'orb2 25s ease-in-out infinite'}}/>
+
+      {/* Sidebar */}
+      <div style={{width:234,flexShrink:0,borderRight:'1px solid rgba(255,255,255,0.05)',padding:'26px 12px',display:'flex',flexDirection:'column',position:'sticky',top:0,height:'100vh',background:'rgba(7,7,15,0.97)',backdropFilter:'blur(20px)',zIndex:10}}>
+        <div style={{padding:'0 8px 22px'}}>
+          <div style={{fontSize:16,fontWeight:900,background:'linear-gradient(135deg,#10b981,#3b82f6)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',marginBottom:2}}>Léo Finance OS 💰</div>
+          <div style={{fontSize:9,color:'#333',fontWeight:700,textTransform:'uppercase',letterSpacing:1.2}}>Enterprise Tracking</div>
+        </div>
+
+        <div style={{display:'flex',flexDirection:'column',gap:2,marginBottom:14}}>
+          {NAV.map(n=>(
+            <div key={n.id}>
+              <button onClick={()=>{setView(n.id);if(n.id!=='boutiques')setActiveBoutique(null);}}
+                style={{display:'flex',alignItems:'center',gap:9,padding:'10px 12px',borderRadius:12,border:'none',cursor:'pointer',textAlign:'left',width:'100%',fontSize:13,fontWeight:view===n.id&&(n.id!=='boutiques'||!activeBoutique)?700:500,background:view===n.id&&(n.id!=='boutiques'||!activeBoutique)?'rgba(16,185,129,0.13)':'transparent',color:view===n.id&&(n.id!=='boutiques'||!activeBoutique)?'#34d399':'#444',transition:'all 0.15s'}}>
+                <span style={{fontSize:14,opacity:view===n.id&&(n.id!=='boutiques'||!activeBoutique)?1:0.5}}>{n.icon}</span>{n.label}
+                {view===n.id&&(n.id!=='boutiques'||!activeBoutique)&&<div style={{marginLeft:'auto',width:5,height:5,borderRadius:'50%',background:'#10b981'}}/>}
+              </button>
+              {n.id==='boutiques'&&boutiques.map(b=>(
+                <button key={b.id} onClick={()=>{setView('boutiques');setActiveBoutique(b.id);}}
+                  style={{display:'flex',alignItems:'center',gap:7,padding:'7px 9px 7px 22px',borderRadius:9,border:'none',cursor:'pointer',textAlign:'left',width:'100%',fontSize:11,fontWeight:activeBoutique===b.id?700:400,background:activeBoutique===b.id?`${b.color}16`:'transparent',color:activeBoutique===b.id?b.color:'#333',transition:'all 0.15s'}}>
+                  <div style={{width:5,height:5,borderRadius:'50%',background:b.color,flexShrink:0,boxShadow:activeBoutique===b.id?`0 0 5px ${b.color}`:''}}/>
+                  {b.icon} {b.name.length>15?b.name.slice(0,15)+'…':b.name}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <div style={{flex:1}}/>
+
+        {/* Global snapshot */}
+        <div style={{padding:'12px 10px',borderRadius:12,background:'rgba(16,185,129,0.06)',border:'1px solid rgba(16,185,129,0.1)',marginBottom:10}}>
+          <div style={{fontSize:8,color:'#444',fontWeight:700,textTransform:'uppercase',letterSpacing:1.2,marginBottom:8}}>Global · All time</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+            {[
+              {l:'CA NET',v:eur(G.ca_net),c:'#10b981'},
+              {l:'BÉNÉFICE',v:eur(G.benef),c:col.benef(G.benef)},
+              {l:'ROAS',v:xf(G.roas),c:col.roas(G.roas)},
+              {l:'CONV.',v:pct(G.taux_conversion),c:col.conv(G.taux_conversion)},
+              {l:'MARGE',v:pct(G.taux_marge_brute),c:col.marge(G.taux_marge_brute)},
+              {l:'CPA',v:eur(G.cpa),c:'#3b82f6'},
+            ].map(k=>(
+              <div key={k.l}><div style={{fontSize:12,fontWeight:900,color:k.c,lineHeight:1}}>{k.v}</div><div style={{fontSize:8,color:'#333',marginTop:2}}>{k.l}</div></div>
+            ))}
+          </div>
+        </div>
+        {syncStatus&&(
+          <div style={{padding:'9px 10px',borderRadius:10,background:'rgba(16,185,129,0.07)',border:'1px solid rgba(16,185,129,0.18)',marginBottom:8,display:'flex',alignItems:'center',gap:7}}>
+            <div style={{width:6,height:6,borderRadius:'50%',background:'#10b981',boxShadow:'0 0 6px #10b981',flexShrink:0,animation:'pulse 2s ease-in-out infinite'}}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:9,fontWeight:700,color:'#34d399',letterSpacing:0.5}}>API connectée · {syncStatus.days} jour{syncStatus.days!==1?'s':''}</div>
+              <div style={{fontSize:8,color:'#444',marginTop:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{timeAgo(syncStatus.last_sync)}</div>
+            </div>
+          </div>
+        )}
+        {!syncStatus&&(
+          <div style={{padding:'7px 10px',borderRadius:10,background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.05)',marginBottom:8,display:'flex',alignItems:'center',gap:7}}>
+            <div style={{width:6,height:6,borderRadius:'50%',background:'#333',flexShrink:0}}/>
+            <div style={{fontSize:9,color:'#333',fontWeight:600}}>Sync API non configurée</div>
+          </div>
+        )}
+        <div style={{fontSize:9,color:'#333',textAlign:'center'}}>{totalWeeks} semaines · {boutiques.length} boutiques · 💾 auto-save</div>
+      </div>
+
+      {/* Main */}
+      <div style={{flex:1,overflowY:'auto',height:'100vh'}}>
+        <div style={{maxWidth:1200,margin:'0 auto',padding:'34px 36px',animation:'fadeSlide 0.22s ease'}} key={view+(activeBoutique||'')}>
+          {view==='dashboard'&&<DashboardView boutiques={boutiques} data={data}/>}
+          {view==='saisie'&&<SaisieView boutiques={boutiques} data={data} setData={setData} fieldConfig={fieldConfig} setFieldConfig={setFieldConfig} customFields={customFields} setCustomFields={setCustomFields} fieldOrder={fieldOrder} setFieldOrder={setFieldOrder}/>}
+          {view==='mensuel'&&<MensuelView boutiques={boutiques} data={data} abonnements={abonnements} setAbonnements={setAbonnements}/>}
+          {view==='boutiques'&&activeBoutique&&<BoutiqueDetailView boutique={boutiques.find(b=>b.id===activeBoutique)} data={data}/>}
+          {view==='boutiques'&&!activeBoutique&&<div style={{textAlign:'center',padding:'80px',color:'#444',fontSize:15}}>← Sélectionne une boutique dans la sidebar</div>}
+          {view==='gestion'&&<GestionView boutiques={boutiques} setBoutiques={setBoutiques} data={data} setData={setData}/>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

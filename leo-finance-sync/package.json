@@ -1,0 +1,14 @@
+{
+  "name": "leo-finance-sync",
+  "version": "1.0.0",
+  "description": "Sync automatique Shopify + Google Ads + Klaviyo + GA4 → leo-finance.html",
+  "type": "module",
+  "scripts": {
+    "sync": "node sync.js",
+    "sync:date": "node sync.js",
+    "sync:range": "node sync-range.js",
+    "setup:google": "node setup/get-google-token.js"
+  },
+  "engines": { "node": ">=18.0.0" },
+  "dependencies": {}
+}

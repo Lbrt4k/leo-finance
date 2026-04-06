@@ -1,0 +1,64 @@
+{
+  "_comment": "Copie ce fichier en config.json et remplis tes identifiants",
+
+  "boutiques": [
+    {
+      "id": "emma",
+      "name": "Les Peignoirs d'Emma",
+      "color": "#f472b6",
+      "icon": "🛁",
+
+      "shopify": {
+        "_help": "Admin > Apps > Develop apps > Create app > Admin API access token",
+        "shop": "les-peignoirs-demma.myshopify.com",
+        "token": "shpat_XXXXXXXXXXXXXXXXXXXX"
+      },
+
+      "klaviyo": {
+        "_help": "Klaviyo > Account > Settings > API Keys > Create Private API Key",
+        "api_key": "pk_XXXXXXXXXXXXXXXXXXXX"
+      },
+
+      "google_ads": {
+        "_help": "Google Ads > Tools > API Center > Developer token + Customer ID",
+        "customer_id": "1234567890",
+        "developer_token": "XXXXXXXXXXXXXXXXXXXX",
+        "manager_id": ""
+      },
+
+      "ga4": {
+        "_help": "Google Analytics > Admin > Property > Property ID (dans l'URL)",
+        "property_id": "123456789"
+      }
+    },
+
+    {
+      "id": "aitavia",
+      "name": "AïtaVia",
+      "color": "#a78bfa",
+      "icon": "👟",
+      "shopify": { "shop": "aitavia.myshopify.com", "token": "shpat_XXXXXXXXXXXXXXXXXXXX" },
+      "klaviyo": { "api_key": "pk_XXXXXXXXXXXXXXXXXXXX" },
+      "google_ads": { "customer_id": "1234567890", "developer_token": "XXXXXXXXXXXXXXXXXXXX", "manager_id": "" },
+      "ga4": { "property_id": "123456789" }
+    },
+
+    {
+      "id": "kimoko",
+      "name": "Kimoko",
+      "color": "#fbbf24",
+      "icon": "🛍️",
+      "shopify": { "shop": "kimoko.myshopify.com", "token": "shpat_XXXXXXXXXXXXXXXXXXXX" },
+      "klaviyo": { "api_key": "pk_XXXXXXXXXXXXXXXXXXXX" },
+      "google_ads": { "customer_id": "1234567890", "developer_token": "XXXXXXXXXXXXXXXXXXXX", "manager_id": "" },
+      "ga4": { "property_id": "123456789" }
+    }
+  ],
+
+  "google": {
+    "_help": "OAuth partagé pour Google Ads + GA4. Lance: npm run setup:google",
+    "client_id": "XXXX.apps.googleusercontent.com",
+    "client_secret": "GOCSPX-XXXXXXXXXXXXXXXXXXXX",
+    "refresh_token": "1//XXXXXXXXXXXXXXXXXXXX"
+  }
+}

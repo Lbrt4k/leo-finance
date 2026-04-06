@@ -1,0 +1,115 @@
+name: 🚀 Léo Finance — Sync quotidien
+
+# ─── DÉCLENCHEURS ─────────────────────────────────────────────────────────────
+on:
+  schedule:
+    # Tous les jours à 00:05 UTC (= 02:05 heure Paris en hiver, 01:05 en été)
+    - cron: '5 0 * * *'
+
+  # Déclenchement manuel depuis l'onglet "Actions" de GitHub
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Date à synchroniser (YYYY-MM-DD) — vide = hier'
+        required: false
+        default: ''
+      range_from:
+        description: 'Plage — date de début (YYYY-MM-DD)'
+        required: false
+        default: ''
+      range_to:
+        description: 'Plage — date de fin (YYYY-MM-DD)'
+        required: false
+        default: ''
+
+# ─── JOB ──────────────────────────────────────────────────────────────────────
+jobs:
+  sync:
+    name: Sync API → leo-sync-data.js
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # nécessaire pour le commit de retour
+
+    steps:
+      # 1. Checkout
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      # 2. Node.js
+      - name: ⚙️ Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3. Lancer le sync avec les bons arguments
+      - name: 🔄 Lancer le sync
+        run: |
+          cd leo-finance-sync
+
+          if [ -n "${{ github.event.inputs.range_from }}" ] && [ -n "${{ github.event.inputs.range_to }}" ]; then
+            echo "▶ Mode plage : ${{ github.event.inputs.range_from }} → ${{ github.event.inputs.range_to }}"
+            node sync.js --range ${{ github.event.inputs.range_from }} ${{ github.event.inputs.range_to }}
+          elif [ -n "${{ github.event.inputs.date }}" ]; then
+            echo "▶ Mode date : ${{ github.event.inputs.date }}"
+            node sync.js ${{ github.event.inputs.date }}
+          else
+            echo "▶ Mode automatique : hier"
+            node sync.js
+          fi
+        env:
+          # ── Les Peignoirs d'Emma ──────────────────────────────────────────
+          BOUTIQUE_EMMA_SHOPIFY_SHOP:    ${{ secrets.EMMA_SHOPIFY_SHOP }}
+          BOUTIQUE_EMMA_SHOPIFY_TOKEN:   ${{ secrets.EMMA_SHOPIFY_TOKEN }}
+          BOUTIQUE_EMMA_KLAVIYO_KEY:     ${{ secrets.EMMA_KLAVIYO_KEY }}
+          BOUTIQUE_EMMA_GADS_CUSTOMER:   ${{ secrets.EMMA_GADS_CUSTOMER }}
+          BOUTIQUE_EMMA_GADS_DEV_TOKEN:  ${{ secrets.EMMA_GADS_DEV_TOKEN }}
+          BOUTIQUE_EMMA_GADS_MANAGER_ID: ${{ secrets.EMMA_GADS_MANAGER_ID }}
+          BOUTIQUE_EMMA_GA4_PROPERTY:    ${{ secrets.EMMA_GA4_PROPERTY }}
+
+          # ── AïtaVia ──────────────────────────────────────────────────────
+          BOUTIQUE_AITAVIA_SHOPIFY_SHOP:    ${{ secrets.AITAVIA_SHOPIFY_SHOP }}
+          BOUTIQUE_AITAVIA_SHOPIFY_TOKEN:   ${{ secrets.AITAVIA_SHOPIFY_TOKEN }}
+          BOUTIQUE_AITAVIA_KLAVIYO_KEY:     ${{ secrets.AITAVIA_KLAVIYO_KEY }}
+          BOUTIQUE_AITAVIA_GADS_CUSTOMER:   ${{ secrets.AITAVIA_GADS_CUSTOMER }}
+          BOUTIQUE_AITAVIA_GADS_DEV_TOKEN:  ${{ secrets.AITAVIA_GADS_DEV_TOKEN }}
+          BOUTIQUE_AITAVIA_GADS_MANAGER_ID: ${{ secrets.AITAVIA_GADS_MANAGER_ID }}
+          BOUTIQUE_AITAVIA_GA4_PROPERTY:    ${{ secrets.AITAVIA_GA4_PROPERTY }}
+
+          # ── Kimoko ───────────────────────────────────────────────────────
+          BOUTIQUE_KIMOKO_SHOPIFY_SHOP:    ${{ secrets.KIMOKO_SHOPIFY_SHOP }}
+          BOUTIQUE_KIMOKO_SHOPIFY_TOKEN:   ${{ secrets.KIMOKO_SHOPIFY_TOKEN }}
+          BOUTIQUE_KIMOKO_KLAVIYO_KEY:     ${{ secrets.KIMOKO_KLAVIYO_KEY }}
+          BOUTIQUE_KIMOKO_GADS_CUSTOMER:   ${{ secrets.KIMOKO_GADS_CUSTOMER }}
+          BOUTIQUE_KIMOKO_GADS_DEV_TOKEN:  ${{ secrets.KIMOKO_GADS_DEV_TOKEN }}
+          BOUTIQUE_KIMOKO_GADS_MANAGER_ID: ${{ secrets.KIMOKO_GADS_MANAGER_ID }}
+          BOUTIQUE_KIMOKO_GA4_PROPERTY:    ${{ secrets.KIMOKO_GA4_PROPERTY }}
+
+          # ── Google OAuth partagé (Ads + GA4) ─────────────────────────────
+          GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REFRESH_TOKEN: ${{ secrets.GOOGLE_REFRESH_TOKEN }}
+
+      # 4. Commit + push du fichier généré
+      - name: 💾 Commit leo-sync-data.js
+        run: |
+          git config user.name  "Leo Finance Bot 🤖"
+          git config user.email "leo-finance-bot@noreply.github.com"
+          git add leo-sync-data.js
+          if git diff --staged --quiet; then
+            echo "Aucune nouvelle donnée — rien à committer."
+          else
+            git commit -m "sync: données du $(date -u +%Y-%m-%d) ✅"
+            git push
+          fi
+
+      # 5. Résumé dans le log Actions
+      - name: 📊 Résumé
+        run: |
+          echo "### ✅ Sync terminée" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Date :** $(date -u +%Y-%m-%d\ %H:%M) UTC" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f leo-sync-data.js ]; then
+            DAYS=$(grep -o '"synced_days":\[' leo-sync-data.js | wc -l || echo "?")
+            echo "**Fichier :** \`leo-sync-data.js\` mis à jour" >> $GITHUB_STEP_SUMMARY
+          fi
