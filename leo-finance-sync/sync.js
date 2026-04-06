@@ -378,6 +378,7 @@ async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
   const weeklyData = {};
 
   for (const [sliceStart, sliceEnd] of slices) {
+    await new Promise(r => setTimeout(r, 1200)); // rate limit Klaviyo
     const data = await klaviyoPost(api_key, 'metric-aggregates/', {
       data: {
         type: 'metric-aggregate',
