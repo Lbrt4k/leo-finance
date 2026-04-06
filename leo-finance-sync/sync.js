@@ -353,43 +353,60 @@ async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
   const metricId = await getKlaviyoMetricId(api_key);
   if (!metricId) return {};
 
-  // Calcul date de fin (demain)
+  // Klaviyo max range = 1 an → on découpe en tranches annuelles
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   const endDate = tomorrow.toISOString().split('T')[0];
 
-  log('🔄', `Klaviyo: récupération du CA email depuis ${startDate}...`);
+  // Génère les tranches [start, end] d'au plus 1 an
+  const slices = [];
+  let cursor = new Date(startDate);
+  const finalEnd = new Date(endDate);
+  while (cursor < finalEnd) {
+    const sliceEnd = new Date(cursor);
+    sliceEnd.setFullYear(sliceEnd.getFullYear() + 1);
+    if (sliceEnd > finalEnd) sliceEnd.setTime(finalEnd.getTime());
+    slices.push([
+      cursor.toISOString().split('T')[0],
+      sliceEnd.toISOString().split('T')[0],
+    ]);
+    cursor = new Date(sliceEnd);
+  }
 
-  const data = await klaviyoPost(api_key, 'metric-aggregates/', {
-    data: {
-      type: 'metric-aggregate',
-      attributes: {
-        metric_id:    metricId,
-        interval:     'day',
-        measurements: ['sum_value'],
-        filter:       `greater-or-equal(datetime,${startDate}T00:00:00+00:00),less-than(datetime,${endDate}T00:00:00+00:00)`,
-        by:           ['$attributed_channel'],
-      },
-    },
-  });
-
-  const dates   = data.data?.attributes?.dates   || [];
-  const results = data.data?.attributes?.results || [];
+  log('🔄', `Klaviyo: récupération du CA email (${slices.length} tranche(s) annuelle(s))...`);
 
   const weeklyData = {};
 
-  for (const r of results) {
-    const channel = (r.dimensions?.[0] || '').toLowerCase();
-    if (!channel.includes('email') && !channel.includes('flow') && !channel.includes('campaign')) continue;
-
-    const values = r.measurements?.sum_value || [];
-    values.forEach((val, i) => {
-      if (!val || !dates[i]) return;
-      const dateStr = dates[i].split('T')[0];
-      const weekKey = getISOWeekKey(dateStr);
-      if (!weeklyData[weekKey]) weeklyData[weekKey] = { ca_email: 0 };
-      weeklyData[weekKey].ca_email += parseFloat(val || 0);
+  for (const [sliceStart, sliceEnd] of slices) {
+    const data = await klaviyoPost(api_key, 'metric-aggregates/', {
+      data: {
+        type: 'metric-aggregate',
+        attributes: {
+          metric_id:    metricId,
+          interval:     'day',
+          measurements: ['sum_value'],
+          filter:       `greater-or-equal(datetime,${sliceStart}T00:00:00+00:00),less-than(datetime,${sliceEnd}T00:00:00+00:00)`,
+          by:           ['$attributed_channel'],
+        },
+      },
     });
+
+    const dates   = data.data?.attributes?.dates   || [];
+    const results = data.data?.attributes?.results || [];
+
+    for (const r of results) {
+      const channel = (r.dimensions?.[0] || '').toLowerCase();
+      if (!channel.includes('email') && !channel.includes('flow') && !channel.includes('campaign')) continue;
+
+      const values = r.measurements?.sum_value || [];
+      values.forEach((val, i) => {
+        if (!val || !dates[i]) return;
+        const dateStr = dates[i].split('T')[0];
+        const weekKey = getISOWeekKey(dateStr);
+        if (!weeklyData[weekKey]) weeklyData[weekKey] = { ca_email: 0 };
+        weeklyData[weekKey].ca_email += parseFloat(val || 0);
+      });
+    }
   }
 
   // Arrondi
