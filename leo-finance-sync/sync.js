@@ -334,7 +334,7 @@ async function syncKlaviyo(cfg, dateStr) {
     },
   });
 
-  const results = data.data?.attributes?.results || [];
+  const results = data.data?.attributes?.data || [];  // Klaviyo retourne "data", pas "results"
   const ca_email = parseFloat(results[0]?.measurements?.sum_value?.[0] || 0);
 
   return { ca_email: Math.round(ca_email * 100) / 100 };
@@ -384,8 +384,8 @@ async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
       },
     });
 
-    const dates   = data.data?.attributes?.dates   || [];
-    const results = data.data?.attributes?.results || [];
+    const dates   = data.data?.attributes?.dates || [];
+    const results = data.data?.attributes?.data  || [];  // Klaviyo retourne "data", pas "results"
 
     // Prend le premier résultat (total sans segmentation par channel)
     const r = results[0];
