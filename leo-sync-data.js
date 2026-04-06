@@ -1,5 +1,5 @@
 // Léo Finance OS — Sync Data (auto-généré, ne pas modifier)
-// Dernière sync: 2026-04-06T16:32:08.833Z
+// Dernière sync: 2026-04-06T16:36:16.458Z
 // Semaines synchronisées: 27
 window.__SYNC_DATA__ = {
   "weeks": {
@@ -90,7 +90,7 @@ window.__SYNC_DATA__ = {
         "retours": 256.11,
         "nouveaux_clients": 9,
         "clients_recurrents": 0,
-        "ca_email": 585.51
+        "ca_email": 136.31
       },
       "2025-W49": {
         "ca": 3682.58,
@@ -98,7 +98,7 @@ window.__SYNC_DATA__ = {
         "retours": 1009.36,
         "nouveaux_clients": 57,
         "clients_recurrents": 1,
-        "ca_email": 3601.67
+        "ca_email": 323.46
       },
       "2025-W50": {
         "ca": 4479.07,
@@ -106,7 +106,7 @@ window.__SYNC_DATA__ = {
         "retours": 1165.1,
         "nouveaux_clients": 75,
         "clients_recurrents": 1,
-        "ca_email": 4532.98
+        "ca_email": 530.1
       },
       "2025-W51": {
         "ca": 3298.89,
@@ -114,7 +114,7 @@ window.__SYNC_DATA__ = {
         "retours": 814.42,
         "nouveaux_clients": 55,
         "clients_recurrents": 0,
-        "ca_email": 3287.68
+        "ca_email": 275.54
       },
       "2025-W52": {
         "ca": 444.25,
@@ -122,7 +122,7 @@ window.__SYNC_DATA__ = {
         "retours": 236.63,
         "nouveaux_clients": 7,
         "clients_recurrents": 0,
-        "ca_email": 444.25
+        "ca_email": 53.91
       },
       "2026-W01": {
         "ca": 632.03,
@@ -191,7 +191,7 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 6,
         "clients_recurrents": 0,
-        "ca_email": 379.3
+        "ca_email": 44.9
       },
       "2026-W11": {
         "ca": 69.9,
@@ -222,7 +222,7 @@ window.__SYNC_DATA__ = {
   "synced_days": [
     "2026-04-05"
   ],
-  "last_sync": "2026-04-06T16:32:08.833Z",
+  "last_sync": "2026-04-06T16:36:16.458Z",
   "synced_fields": [
     "ca",
     "retours",
