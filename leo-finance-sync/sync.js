@@ -418,7 +418,7 @@ async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
 // ── GOOGLE ADS via leo-ads-data.json (écrit par le Google Ads Script) ─────────
 function loadGoogleAdsData() {
   try {
-    const filePath = join(dirname(new URL(import.meta.url).pathname), 'leo-ads-data.json');
+    const filePath = join(dirname(new URL(import.meta.url).pathname), '..', 'leo-ads-data.json');
     if (!existsSync(filePath)) return {};
     return JSON.parse(readFileSync(filePath, 'utf8'));
   } catch (e) {
