@@ -330,12 +330,15 @@ async function syncKlaviyo(cfg, dateStr) {
         interval:     'day',
         measurements: ['sum_value'],
         filter:       `greater-or-equal(datetime,${start}),less-than(datetime,${end})`,
+        by:           ['$attributed_channel'],
       },
     },
   });
 
   const results = data.data?.attributes?.data || [];  // Klaviyo retourne "data", pas "results"
-  const ca_email = parseFloat(results[0]?.measurements?.sum_value?.[0] || 0);
+  // Cherche le channel "email" dans les résultats groupés par $attributed_channel
+  const emailRow = results.find(r => (r.dimensions?.[0] || '').toLowerCase().includes('email'));
+  const ca_email = parseFloat(emailRow?.measurements?.sum_value?.[0] || 0);
 
   return { ca_email: Math.round(ca_email * 100) / 100 };
 }
@@ -380,6 +383,7 @@ async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
           interval:     'day',
           measurements: ['sum_value'],
           filter:       `greater-or-equal(datetime,${sliceStart}T00:00:00+00:00),less-than(datetime,${sliceEnd}T00:00:00+00:00)`,
+          by:           ['$attributed_channel'],
         },
       },
     });
@@ -387,9 +391,10 @@ async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
     const dates   = data.data?.attributes?.dates || [];
     const results = data.data?.attributes?.data  || [];  // Klaviyo retourne "data", pas "results"
 
-    // Prend le premier résultat (total sans segmentation par channel)
-    const r = results[0];
-    if (r) {
+    for (const r of results) {
+      const channel = (r.dimensions?.[0] || '').toLowerCase();
+      // Garde uniquement Email (exclut SMS, Push, Direct, etc.)
+      if (!channel.includes('email')) continue;
       const values = r.measurements?.sum_value || [];
       values.forEach((val, i) => {
         if (!val || !dates[i]) return;
