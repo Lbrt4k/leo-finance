@@ -469,7 +469,7 @@ function loadGoogleAdsData() {
 const NUMERIC_FIELDS = [
   'ca', 'retours', 'ca_email',
   'commandes', 'nouveaux_clients', 'clients_recurrents',
-  'ajouts_panier', 'taux_conversion',
+  'ajouts_panier',
   'ads', 'impressions', 'clics',
 ];
 
@@ -597,14 +597,15 @@ async function runFullSync(config, existingData) {
     if (boutique.shopify?.token) {
       try {
         const checkoutWeeks = await fullSyncCheckouts(boutique.shopify);
-        for (const [wk, abandonnes] of Object.entries(checkoutWeeks)) {
-          if (!existingData.weeks[bid][wk]) existingData.weeks[bid][wk] = {};
+        // Applique sur TOUTES les semaines avec des commandes
+        // (pas seulement celles avec des checkouts — les anciens expirent après 30j)
+        for (const wk of Object.keys(existingData.weeks[bid])) {
           const cmds = existingData.weeks[bid][wk].commandes || 0;
-          const ajouts = cmds + abandonnes;
-          existingData.weeks[bid][wk].ajouts_panier   = ajouts;
-          existingData.weeks[bid][wk].taux_conversion = ajouts > 0 ? Math.round((cmds / ajouts) * 1000) / 10 : 0;
+          if (cmds === 0) continue;
+          const abandonnes = checkoutWeeks[wk] || 0;
+          existingData.weeks[bid][wk].ajouts_panier = cmds + abandonnes;
         }
-        ok(`Checkouts: ${Object.keys(checkoutWeeks).length} semaines`);
+        ok(`Checkouts: ${Object.keys(checkoutWeeks).length} semaines avec abandons`);
       } catch (e) { fail(`Checkouts full sync: ${e.message}`); }
     }
 
