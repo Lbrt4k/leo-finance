@@ -173,13 +173,14 @@ async function fullSyncShopify(cfg) {
   log('🔄', `Full sync Shopify — récupération de toutes les commandes : ${shop}`);
 
   let allOrders = [];
-  // Première URL — pas de filtre de date, toutes les commandes
+  // Première URL — created_at_min très ancien pour forcer Shopify à retourner TOUT l'historique
   let nextUrl = `https://${shop}/admin/api/2024-04/orders.json?` +
     new URLSearchParams({
-      status: 'any',
-      limit:  250,
-      fields: 'id,total_price,customer,refunds,created_at',
-      order:  'created_at asc',
+      status:         'any',
+      limit:          250,
+      fields:         'id,total_price,customer,refunds,created_at',
+      order:          'created_at asc',
+      created_at_min: '2018-01-01T00:00:00Z',
     });
 
   let page = 0;
