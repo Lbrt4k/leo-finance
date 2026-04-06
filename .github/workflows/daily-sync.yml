@@ -61,28 +61,25 @@ jobs:
           BOUTIQUE_EMMA_SHOPIFY_SHOP:    ${{ secrets.EMMA_SHOPIFY_SHOP }}
           BOUTIQUE_EMMA_SHOPIFY_TOKEN:   ${{ secrets.EMMA_SHOPIFY_TOKEN }}
           BOUTIQUE_EMMA_KLAVIYO_KEY:     ${{ secrets.EMMA_KLAVIYO_KEY }}
-          BOUTIQUE_EMMA_GADS_CUSTOMER:   ${{ secrets.EMMA_GADS_CUSTOMER }}
-          BOUTIQUE_EMMA_GADS_DEV_TOKEN:  ${{ secrets.EMMA_GADS_DEV_TOKEN }}
-          BOUTIQUE_EMMA_GADS_MANAGER_ID: ${{ secrets.EMMA_GADS_MANAGER_ID }}
-          BOUTIQUE_EMMA_GA4_PROPERTY:    ${{ secrets.EMMA_GA4_PROPERTY }}
+          BOUTIQUE_EMMA_GADS_CUSTOMER:   6195151292
+          BOUTIQUE_EMMA_GADS_DEV_TOKEN:  ${{ secrets.GADS_DEV_TOKEN }}
+          BOUTIQUE_EMMA_GADS_MANAGER_ID: ${{ secrets.GADS_MANAGER_ID }}
 
           # ── AïtaVia ──────────────────────────────────────────────────────
           BOUTIQUE_AITAVIA_SHOPIFY_SHOP:    ${{ secrets.AITAVIA_SHOPIFY_SHOP }}
           BOUTIQUE_AITAVIA_SHOPIFY_TOKEN:   ${{ secrets.AITAVIA_SHOPIFY_TOKEN }}
           BOUTIQUE_AITAVIA_KLAVIYO_KEY:     ${{ secrets.AITAVIA_KLAVIYO_KEY }}
-          BOUTIQUE_AITAVIA_GADS_CUSTOMER:   ${{ secrets.AITAVIA_GADS_CUSTOMER }}
-          BOUTIQUE_AITAVIA_GADS_DEV_TOKEN:  ${{ secrets.AITAVIA_GADS_DEV_TOKEN }}
-          BOUTIQUE_AITAVIA_GADS_MANAGER_ID: ${{ secrets.AITAVIA_GADS_MANAGER_ID }}
-          BOUTIQUE_AITAVIA_GA4_PROPERTY:    ${{ secrets.AITAVIA_GA4_PROPERTY }}
+          BOUTIQUE_AITAVIA_GADS_CUSTOMER:   4759818982
+          BOUTIQUE_AITAVIA_GADS_DEV_TOKEN:  ${{ secrets.GADS_DEV_TOKEN }}
+          BOUTIQUE_AITAVIA_GADS_MANAGER_ID: ${{ secrets.GADS_MANAGER_ID }}
 
           # ── Kimoko ───────────────────────────────────────────────────────
           BOUTIQUE_KIMOKO_SHOPIFY_SHOP:    ${{ secrets.KIMOKO_SHOPIFY_SHOP }}
           BOUTIQUE_KIMOKO_SHOPIFY_TOKEN:   ${{ secrets.KIMOKO_SHOPIFY_TOKEN }}
           BOUTIQUE_KIMOKO_KLAVIYO_KEY:     ${{ secrets.KIMOKO_KLAVIYO_KEY }}
-          BOUTIQUE_KIMOKO_GADS_CUSTOMER:   ${{ secrets.KIMOKO_GADS_CUSTOMER }}
-          BOUTIQUE_KIMOKO_GADS_DEV_TOKEN:  ${{ secrets.KIMOKO_GADS_DEV_TOKEN }}
-          BOUTIQUE_KIMOKO_GADS_MANAGER_ID: ${{ secrets.KIMOKO_GADS_MANAGER_ID }}
-          BOUTIQUE_KIMOKO_GA4_PROPERTY:    ${{ secrets.KIMOKO_GA4_PROPERTY }}
+          BOUTIQUE_KIMOKO_GADS_CUSTOMER:   5829454505
+          BOUTIQUE_KIMOKO_GADS_DEV_TOKEN:  ${{ secrets.GADS_DEV_TOKEN }}
+          BOUTIQUE_KIMOKO_GADS_MANAGER_ID: ${{ secrets.GADS_MANAGER_ID }}
 
           # ── Google OAuth partagé (Ads + GA4) ─────────────────────────────
           GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}

@@ -2,7 +2,7 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
  * ║          LÉO FINANCE OS — SYNC ENGINE v1.0                  ║
- * ║  Shopify · Google Ads · GA4 · Klaviyo → leo-sync-data.js   ║
+ * ║  Shopify · Google Ads · Klaviyo → leo-sync-data.js          ║
  * ╚══════════════════════════════════════════════════════════════╝
  *
  * Usage:
@@ -20,8 +20,6 @@
  *   ✅ Ads (dépenses)   (Google Ads API)
  *   ✅ Impressions      (Google Ads API)
  *   ✅ Clics            (Google Ads API)
- *   ✅ Sessions         (GA4)
- *   ✅ Ajouts panier    (GA4)
  *
  * Champs MANUELS (non synchronisés):
  *   ✋ Coût Fournisseur
@@ -293,42 +291,11 @@ async function syncGoogleAds(cfg, dateStr, accessToken) {
   };
 }
 
-// ── GOOGLE ANALYTICS 4 ────────────────────────────────────────────────────────
-async function syncGA4(cfg, dateStr, accessToken) {
-  const { property_id } = cfg;
-
-  const res = await fetch(
-    `https://analyticsdata.googleapis.com/v1beta/properties/${property_id}:runReport`,
-    {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        dateRanges: [{ startDate: dateStr, endDate: dateStr }],
-        metrics: [
-          { name: 'sessions' },
-          { name: 'addToCarts' },
-        ],
-      }),
-    }
-  );
-
-  if (!res.ok) throw new Error(`GA4: HTTP ${res.status}`);
-
-  const data = await res.json();
-  const row  = data.rows?.[0]?.metricValues;
-
-  return {
-    sessions:      parseInt(row?.[0]?.value || 0),
-    ajouts_panier: parseInt(row?.[1]?.value || 0),
-  };
-}
-
 // ── AGGREGATE: day → week ──────────────────────────────────────────────────────
 const NUMERIC_FIELDS = [
   'ca', 'retours', 'ca_email',
   'commandes', 'nouveaux_clients', 'clients_recurrents',
   'ads', 'impressions', 'clics',
-  'sessions', 'ajouts_panier',
 ];
 
 const MANUAL_FIELDS = ['fournisseur', 'livraison', 'shopify', 'autres'];
@@ -396,15 +363,6 @@ async function syncDate(dateStr, config, existingData) {
       } catch (e) { fail(`Google Ads: ${e.message}`); }
     }
 
-    // GA4
-    if (boutique.ga4?.property_id && !boutique.ga4.property_id.includes('XXX') && googleToken) {
-      try {
-        const d = await syncGA4(boutique.ga4, dateStr, googleToken);
-        Object.assign(results[bid], d);
-        ok(`GA4  ${d.sessions} sessions · ${d.ajouts_panier} ajouts panier`);
-      } catch (e) { fail(`GA4: ${e.message}`); }
-    }
-
     // Merge into weekly store
     if (!existingData.weeks[bid])          existingData.weeks[bid] = {};
     if (!existingData.weeks[bid][weekKey]) existingData.weeks[bid][weekKey] = {};
@@ -442,9 +400,6 @@ function loadConfigFromEnv() {
         customer_id:     process.env[`BOUTIQUE_${ID}_GADS_CUSTOMER`]  || '',
         developer_token: process.env[`BOUTIQUE_${ID}_GADS_DEV_TOKEN`] || '',
         manager_id:      process.env[`BOUTIQUE_${ID}_GADS_MANAGER_ID`] || '',
-      },
-      ga4: {
-        property_id: process.env[`BOUTIQUE_${ID}_GA4_PROPERTY`] || '',
       },
     };
     // Skip boutiques with no Shopify token configured

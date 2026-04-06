@@ -11,7 +11,7 @@
       "shopify": {
         "_help": "Admin > Apps > Develop apps > Create app > Admin API access token",
         "shop": "les-peignoirs-demma.myshopify.com",
-        "token": "shpat_XXXXXXXXXXXXXXXXXXXX"
+        "token": "shpss_XXXXXXXXXXXXXXXXXXXX"
       },
 
       "klaviyo": {
@@ -37,7 +37,7 @@
       "name": "AïtaVia",
       "color": "#a78bfa",
       "icon": "👟",
-      "shopify": { "shop": "aitavia.myshopify.com", "token": "shpat_XXXXXXXXXXXXXXXXXXXX" },
+      "shopify": { "shop": "aitavia.myshopify.com", "token": "shpss_XXXXXXXXXXXXXXXXXXXX" },
       "klaviyo": { "api_key": "pk_XXXXXXXXXXXXXXXXXXXX" },
       "google_ads": { "customer_id": "1234567890", "developer_token": "XXXXXXXXXXXXXXXXXXXX", "manager_id": "" },
       "ga4": { "property_id": "123456789" }
@@ -48,7 +48,7 @@
       "name": "Kimoko",
       "color": "#fbbf24",
       "icon": "🛍️",
-      "shopify": { "shop": "kimoko.myshopify.com", "token": "shpat_XXXXXXXXXXXXXXXXXXXX" },
+      "shopify": { "shop": "kimoko.myshopify.com", "token": "shpss_XXXXXXXXXXXXXXXXXXXX" },
       "klaviyo": { "api_key": "pk_XXXXXXXXXXXXXXXXXXXX" },
       "google_ads": { "customer_id": "1234567890", "developer_token": "XXXXXXXXXXXXXXXXXXXX", "manager_id": "" },
       "ga4": { "property_id": "123456789" }
