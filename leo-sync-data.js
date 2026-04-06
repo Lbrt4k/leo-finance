@@ -1,6 +1,6 @@
 // Léo Finance OS — Sync Data (auto-généré, ne pas modifier)
-// Dernière sync: 2026-04-06T17:02:11.956Z
-// Semaines synchronisées: 27
+// Dernière sync: 2026-04-06T17:05:44.058Z
+// Semaines synchronisées: 28
 window.__SYNC_DATA__ = {
   "weeks": {
     "emma": {
@@ -10,7 +10,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 6,
         "clients_recurrents": 0,
-        "ca_email": 536.21
+        "ca_email": 536.21,
+        "ads": 68.64,
+        "impressions": 12456,
+        "clics": 190
       },
       "2026-W06": {
         "ca": 1232.07,
@@ -18,7 +21,10 @@ window.__SYNC_DATA__ = {
         "retours": 99.33,
         "nouveaux_clients": 19,
         "clients_recurrents": 0,
-        "ca_email": 1299.9
+        "ca_email": 1299.9,
+        "ads": 432.86,
+        "impressions": 55986,
+        "clics": 802
       },
       "2026-W07": {
         "ca": 1254.59,
@@ -26,7 +32,10 @@ window.__SYNC_DATA__ = {
         "retours": 227.18,
         "nouveaux_clients": 21,
         "clients_recurrents": 0,
-        "ca_email": 1335.46
+        "ca_email": 1335.46,
+        "ads": 386.26,
+        "impressions": 58298,
+        "clics": 752
       },
       "2026-W08": {
         "ca": 614.21,
@@ -34,7 +43,10 @@ window.__SYNC_DATA__ = {
         "retours": 89.9,
         "nouveaux_clients": 8,
         "clients_recurrents": 0,
-        "ca_email": 614.21
+        "ca_email": 614.21,
+        "ads": 228.38,
+        "impressions": 36318,
+        "clics": 561
       },
       "2026-W09": {
         "ca": 557.44,
@@ -42,7 +54,10 @@ window.__SYNC_DATA__ = {
         "retours": 180.17,
         "nouveaux_clients": 9,
         "clients_recurrents": 0,
-        "ca_email": 557.44
+        "ca_email": 557.44,
+        "ads": 148.65,
+        "impressions": 29299,
+        "clics": 403
       },
       "2026-W10": {
         "ca": 107.82,
@@ -50,7 +65,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 2,
         "clients_recurrents": 0,
-        "ca_email": 107.82
+        "ca_email": 107.82,
+        "ads": 37.45,
+        "impressions": 7027,
+        "clics": 105
       },
       "2026-W11": {
         "ca": 414.34,
@@ -58,7 +76,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 7,
         "clients_recurrents": 0,
-        "ca_email": 414.34
+        "ca_email": 414.34,
+        "ads": 32.95,
+        "impressions": 8099,
+        "clics": 116
       },
       "2026-W12": {
         "ca": 213.62,
@@ -66,7 +87,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 4,
         "clients_recurrents": 0,
-        "ca_email": 213.62
+        "ca_email": 213.62,
+        "ads": 131.43,
+        "impressions": 18522,
+        "clics": 305
       },
       "2026-W13": {
         "ca": 35.91,
@@ -74,7 +98,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 1,
         "clients_recurrents": 0,
-        "ca_email": 35.91
+        "ca_email": 35.91,
+        "ads": 129.51,
+        "impressions": 21733,
+        "clics": 351
       },
       "2025-W47": {
         "ca": 94.8,
@@ -82,7 +109,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 2,
         "clients_recurrents": 0,
-        "ca_email": 94.8
+        "ca_email": 94.8,
+        "ads": 38.32,
+        "impressions": 5801,
+        "clics": 76
       },
       "2025-W48": {
         "ca": 585.51,
@@ -90,7 +120,10 @@ window.__SYNC_DATA__ = {
         "retours": 256.11,
         "nouveaux_clients": 9,
         "clients_recurrents": 0,
-        "ca_email": 136.31
+        "ca_email": 136.31,
+        "ads": 143.41,
+        "impressions": 18733,
+        "clics": 431
       },
       "2025-W49": {
         "ca": 3682.58,
@@ -98,7 +131,10 @@ window.__SYNC_DATA__ = {
         "retours": 1009.36,
         "nouveaux_clients": 57,
         "clients_recurrents": 1,
-        "ca_email": 323.46
+        "ca_email": 323.46,
+        "ads": 400.56,
+        "impressions": 64819,
+        "clics": 1336
       },
       "2025-W50": {
         "ca": 4479.07,
@@ -106,7 +142,10 @@ window.__SYNC_DATA__ = {
         "retours": 1165.1,
         "nouveaux_clients": 75,
         "clients_recurrents": 1,
-        "ca_email": 530.1
+        "ca_email": 530.1,
+        "ads": 776.05,
+        "impressions": 104020,
+        "clics": 1897
       },
       "2025-W51": {
         "ca": 3298.89,
@@ -114,7 +153,10 @@ window.__SYNC_DATA__ = {
         "retours": 814.42,
         "nouveaux_clients": 55,
         "clients_recurrents": 0,
-        "ca_email": 275.54
+        "ca_email": 275.54,
+        "ads": 746.76,
+        "impressions": 100793,
+        "clics": 1476
       },
       "2025-W52": {
         "ca": 444.25,
@@ -122,7 +164,10 @@ window.__SYNC_DATA__ = {
         "retours": 236.63,
         "nouveaux_clients": 7,
         "clients_recurrents": 0,
-        "ca_email": 53.91
+        "ca_email": 53.91,
+        "ads": 157.36,
+        "impressions": 41270,
+        "clics": 612
       },
       "2026-W01": {
         "ca": 632.03,
@@ -130,7 +175,10 @@ window.__SYNC_DATA__ = {
         "retours": 54.9,
         "nouveaux_clients": 9,
         "clients_recurrents": 0,
-        "ca_email": 632.03
+        "ca_email": 632.03,
+        "ads": 71.93,
+        "impressions": 22944,
+        "clics": 341
       },
       "2026-W02": {
         "ca": 640.96,
@@ -138,7 +186,10 @@ window.__SYNC_DATA__ = {
         "retours": 245.78,
         "nouveaux_clients": 12,
         "clients_recurrents": 0,
-        "ca_email": 674.87
+        "ca_email": 674.87,
+        "ads": 129.92,
+        "impressions": 29731,
+        "clics": 488
       },
       "2026-W03": {
         "ca": 296.2,
@@ -146,7 +197,10 @@ window.__SYNC_DATA__ = {
         "retours": 100.58,
         "nouveaux_clients": 5,
         "clients_recurrents": 1,
-        "ca_email": 296.2
+        "ca_email": 296.2,
+        "ads": 175.76,
+        "impressions": 28815,
+        "clics": 513
       },
       "2026-W04": {
         "ca": 224.66,
@@ -154,7 +208,10 @@ window.__SYNC_DATA__ = {
         "retours": 224.66,
         "nouveaux_clients": 4,
         "clients_recurrents": 0,
-        "ca_email": 224.66
+        "ca_email": 224.66,
+        "ads": 263.84,
+        "impressions": 44832,
+        "clics": 709
       },
       "2026-W05": {
         "ca": 257.81,
@@ -162,7 +219,15 @@ window.__SYNC_DATA__ = {
         "retours": 42.42,
         "nouveaux_clients": 5,
         "clients_recurrents": 0,
-        "ca_email": 257.81
+        "ca_email": 257.81,
+        "ads": 200.28,
+        "impressions": 23588,
+        "clics": 380
+      },
+      "2025-W46": {
+        "ads": 0,
+        "impressions": 2,
+        "clics": 0
       }
     },
     "aitavia": {
@@ -222,7 +287,7 @@ window.__SYNC_DATA__ = {
   "synced_days": [
     "2026-04-05"
   ],
-  "last_sync": "2026-04-06T17:02:11.956Z",
+  "last_sync": "2026-04-06T17:05:44.058Z",
   "synced_fields": [
     "ca",
     "retours",
