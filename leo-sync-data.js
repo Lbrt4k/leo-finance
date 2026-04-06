@@ -1,5 +1,5 @@
 // Léo Finance OS — Sync Data (auto-généré, ne pas modifier)
-// Dernière sync: 2026-04-06T17:05:44.058Z
+// Dernière sync: 2026-04-06T17:13:49.902Z
 // Semaines synchronisées: 28
 window.__SYNC_DATA__ = {
   "weeks": {
@@ -231,7 +231,11 @@ window.__SYNC_DATA__ = {
       }
     },
     "aitavia": {
-      "2026-W14": {}
+      "2026-W14": {
+        "ads": 93.14,
+        "impressions": 23330,
+        "clics": 188
+      }
     },
     "kimoko": {
       "2026-W14": {
@@ -240,7 +244,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 4,
         "clients_recurrents": 0,
-        "ca_email": 144.11
+        "ca_email": 144.11,
+        "ads": 140.97,
+        "impressions": 61416,
+        "clics": 1261
       },
       "2026-W09": {
         "ca": 44.9,
@@ -248,7 +255,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 1,
         "clients_recurrents": 0,
-        "ca_email": 44.9
+        "ca_email": 44.9,
+        "ads": 80.47,
+        "impressions": 15907,
+        "clics": 260
       },
       "2026-W10": {
         "ca": 379.3,
@@ -256,7 +266,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 6,
         "clients_recurrents": 0,
-        "ca_email": 44.9
+        "ca_email": 44.9,
+        "ads": 149.81,
+        "impressions": 61756,
+        "clics": 735
       },
       "2026-W11": {
         "ca": 69.9,
@@ -264,7 +277,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 1,
         "clients_recurrents": 0,
-        "ca_email": 69.9
+        "ca_email": 69.9,
+        "ads": 127.16,
+        "impressions": 66799,
+        "clics": 1274
       },
       "2026-W12": {
         "ca": 349.4,
@@ -272,7 +288,10 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 5,
         "clients_recurrents": 0,
-        "ca_email": 349.4
+        "ca_email": 349.4,
+        "ads": 139.68,
+        "impressions": 56524,
+        "clics": 724
       },
       "2026-W13": {
         "ca": 22.41,
@@ -280,14 +299,17 @@ window.__SYNC_DATA__ = {
         "retours": 0,
         "nouveaux_clients": 1,
         "clients_recurrents": 0,
-        "ca_email": 22.41
+        "ca_email": 22.41,
+        "ads": 139.49,
+        "impressions": 139324,
+        "clics": 2322
       }
     }
   },
   "synced_days": [
     "2026-04-05"
   ],
-  "last_sync": "2026-04-06T17:05:44.058Z",
+  "last_sync": "2026-04-06T17:13:49.902Z",
   "synced_fields": [
     "ca",
     "retours",
