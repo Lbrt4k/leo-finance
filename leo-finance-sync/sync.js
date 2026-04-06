@@ -330,19 +330,12 @@ async function syncKlaviyo(cfg, dateStr) {
         interval:     'day',
         measurements: ['sum_value'],
         filter:       `greater-or-equal(datetime,${start}),less-than(datetime,${end})`,
-        by:           ['$attributed_channel'],
       },
     },
   });
 
-  let ca_email = 0;
   const results = data.data?.attributes?.results || [];
-  for (const r of results) {
-    const channel = r.dimensions?.[0]?.toLowerCase() || '';
-    if (channel.includes('email') || channel.includes('flow') || channel.includes('campaign')) {
-      ca_email += parseFloat(r.measurements?.sum_value?.[0] || 0);
-    }
-  }
+  const ca_email = parseFloat(results[0]?.measurements?.sum_value?.[0] || 0);
 
   return { ca_email: Math.round(ca_email * 100) / 100 };
 }
@@ -387,7 +380,6 @@ async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
           interval:     'day',
           measurements: ['sum_value'],
           filter:       `greater-or-equal(datetime,${sliceStart}T00:00:00+00:00),less-than(datetime,${sliceEnd}T00:00:00+00:00)`,
-          by:           ['$attributed_channel'],
         },
       },
     });
@@ -395,10 +387,9 @@ async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
     const dates   = data.data?.attributes?.dates   || [];
     const results = data.data?.attributes?.results || [];
 
-    for (const r of results) {
-      const channel = (r.dimensions?.[0] || '').toLowerCase();
-      if (!channel.includes('email') && !channel.includes('flow') && !channel.includes('campaign')) continue;
-
+    // Prend le premier résultat (total sans segmentation par channel)
+    const r = results[0];
+    if (r) {
       const values = r.measurements?.sum_value || [];
       values.forEach((val, i) => {
         if (!val || !dates[i]) return;
