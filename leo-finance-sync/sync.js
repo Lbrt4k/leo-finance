@@ -415,51 +415,16 @@ async function fullSyncKlaviyo(cfg, startDate = '2022-01-01') {
   return weeklyData;
 }
 
-// ── GOOGLE ADS ────────────────────────────────────────────────────────────────
-async function syncGoogleAds(cfg, dateStr, accessToken) {
-  const { customer_id, developer_token, manager_id } = cfg;
-  const cid = customer_id.replace(/-/g, '');
-
-  const query = `
-    SELECT
-      metrics.cost_micros,
-      metrics.impressions,
-      metrics.clicks
-    FROM customer
-    WHERE segments.date = '${dateStr}'
-  `.trim();
-
-  const headers = {
-    'Authorization': `Bearer ${accessToken}`,
-    'developer-token': developer_token,
-    'Content-Type': 'application/json',
-  };
-  if (manager_id) headers['login-customer-id'] = manager_id.replace(/-/g, '');
-
-  const res = await fetch(
-    `https://googleads.googleapis.com/v17/customers/${cid}/googleAds:search`,
-    { method: 'POST', headers, body: JSON.stringify({ query }) }
-  );
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Google Ads: HTTP ${res.status} — ${text.slice(0, 200)}`);
+// ── GOOGLE ADS via leo-ads-data.json (écrit par le Google Ads Script) ─────────
+function loadGoogleAdsData() {
+  try {
+    const filePath = join(dirname(new URL(import.meta.url).pathname), 'leo-ads-data.json');
+    if (!existsSync(filePath)) return {};
+    return JSON.parse(readFileSync(filePath, 'utf8'));
+  } catch (e) {
+    warn(`Google Ads: impossible de lire leo-ads-data.json — ${e.message}`);
+    return {};
   }
-
-  const data = await res.json();
-  let ads = 0, impressions = 0, clics = 0;
-
-  for (const result of (data.results || [])) {
-    ads         += parseInt(result.metrics?.costMicros    || 0) / 1_000_000;
-    impressions += parseInt(result.metrics?.impressions   || 0);
-    clics       += parseInt(result.metrics?.clicks        || 0);
-  }
-
-  return {
-    ads:         Math.round(ads * 100) / 100,
-    impressions: Math.round(impressions),
-    clics:       Math.round(clics),
-  };
 }
 
 // ── AGGREGATE: day → week ──────────────────────────────────────────────────────
@@ -522,12 +487,11 @@ async function syncDate(dateStr, config, existingData) {
       } catch (e) { fail(`Klaviyo: ${e.message}`); }
     }
 
-    if (boutique.google_ads?.customer_id && !boutique.google_ads.customer_id.includes('XXX') && googleToken) {
-      try {
-        const d = await syncGoogleAds(boutique.google_ads, dateStr, googleToken);
-        Object.assign(results[bid], d);
-        ok(`Google Ads  ${d.ads}€ · ${d.impressions} impr · ${d.clics} clics`);
-      } catch (e) { fail(`Google Ads: ${e.message}`); }
+    // Google Ads via leo-ads-data.json (alimenté par le Google Ads Script)
+    const adsWeekData = (loadGoogleAdsData()[bid] || {})[weekKey];
+    if (adsWeekData) {
+      Object.assign(results[bid], adsWeekData);
+      ok(`Google Ads  ${adsWeekData.ads}€ · ${adsWeekData.impressions} impr · ${adsWeekData.clics} clics`);
     }
 
     if (!existingData.weeks[bid])          existingData.weeks[bid] = {};
@@ -588,6 +552,17 @@ async function runFullSync(config, existingData) {
         }
         ok(`Klaviyo: ${Object.keys(klaviyoWeeks).length} semaines avec CA email`);
       } catch (e) { fail(`Klaviyo full sync: ${e.message}`); }
+    }
+
+    // ── Google Ads full sync (via leo-ads-data.json) ──
+    const adsAllData = loadGoogleAdsData()[bid] || {};
+    const adsWeekKeys = Object.keys(adsAllData);
+    if (adsWeekKeys.length > 0) {
+      for (const weekKey of adsWeekKeys) {
+        if (!existingData.weeks[bid][weekKey]) existingData.weeks[bid][weekKey] = {};
+        Object.assign(existingData.weeks[bid][weekKey], adsAllData[weekKey]);
+      }
+      ok(`Google Ads: ${adsWeekKeys.length} semaines depuis leo-ads-data.json`);
     }
 
     // Résumé boutique
