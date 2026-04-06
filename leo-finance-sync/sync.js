@@ -311,6 +311,44 @@ async function getKlaviyoMetricId(apiKey) {
   return metric.id;
 }
 
+// ── SHOPIFY : paniers abandonnés (jour) ───────────────────────────────────────
+async function syncCheckouts(cfg, dateStr) {
+  const { shop, token } = cfg;
+  const start = `${dateStr}T00:00:00+00:00`;
+  const end   = `${dateStr}T23:59:59+00:00`;
+  let total = 0, sinceId = 0;
+  for (let p = 0; p < 10; p++) {
+    const params = { limit: 250, created_at_min: start, created_at_max: end };
+    if (sinceId) { params.since_id = sinceId; delete params.created_at_min; delete params.created_at_max; }
+    const data = await shopifyGet(shop, token, 'checkouts.json', params);
+    const rows = data.checkouts || [];
+    total += rows.length;
+    if (rows.length < 250) break;
+    sinceId = rows[rows.length - 1].id;
+  }
+  return total;
+}
+
+// ── SHOPIFY : paniers abandonnés (full sync) ───────────────────────────────────
+async function fullSyncCheckouts(cfg) {
+  const { shop, token } = cfg;
+  log('🔄', 'Full sync checkouts (paniers abandonnés)...');
+  const weekly = {};
+  let sinceId = 0;
+  for (let p = 0; p < 200; p++) {
+    const params = { limit: 250, created_at_min: '2018-01-01T00:00:00Z', since_id: sinceId };
+    const data = await shopifyGet(shop, token, 'checkouts.json', params);
+    const rows = data.checkouts || [];
+    for (const c of rows) {
+      const wk = getISOWeekKey(c.created_at.split('T')[0]);
+      weekly[wk] = (weekly[wk] || 0) + 1;
+    }
+    if (rows.length < 250) break;
+    sinceId = rows[rows.length - 1].id;
+  }
+  return weekly; // { "2026-W14": 42, ... }
+}
+
 // ── KLAVIYO : sync journalier (mode normal) ───────────────────────────────────
 async function syncKlaviyo(cfg, dateStr) {
   const { api_key } = cfg;
@@ -431,6 +469,7 @@ function loadGoogleAdsData() {
 const NUMERIC_FIELDS = [
   'ca', 'retours', 'ca_email',
   'commandes', 'nouveaux_clients', 'clients_recurrents',
+  'ajouts_panier', 'taux_conversion',
   'ads', 'impressions', 'clics',
 ];
 
@@ -487,6 +526,18 @@ async function syncDate(dateStr, config, existingData) {
       } catch (e) { fail(`Klaviyo: ${e.message}`); }
     }
 
+    // Paniers abandonnés → ajouts_panier + taux_conversion
+    if (boutique.shopify?.token) {
+      try {
+        const abandonnes = await syncCheckouts(boutique.shopify, dateStr);
+        const cmds = results[bid].commandes || 0;
+        const ajouts = cmds + abandonnes;
+        results[bid].ajouts_panier    = ajouts;
+        results[bid].taux_conversion  = ajouts > 0 ? Math.round((cmds / ajouts) * 1000) / 10 : 0;
+        ok(`Checkouts  ${ajouts} ajouts · ${results[bid].taux_conversion}% conv`);
+      } catch (e) { fail(`Checkouts: ${e.message}`); }
+    }
+
     // Google Ads via leo-ads-data.json (alimenté par le Google Ads Script)
     const adsWeekData = (loadGoogleAdsData()[bid] || {})[weekKey];
     if (adsWeekData) {
@@ -540,6 +591,21 @@ async function runFullSync(config, existingData) {
         }
         ok(`Shopify: ${weekCount} semaines · ${Object.keys(shopifyWeeks).reduce((s, k) => s + (shopifyWeeks[k].commandes || 0), 0)} commandes totales`);
       } catch (e) { fail(`Shopify full sync: ${e.message}`); }
+    }
+
+    // ── Checkouts full sync (paniers abandonnés) ──
+    if (boutique.shopify?.token) {
+      try {
+        const checkoutWeeks = await fullSyncCheckouts(boutique.shopify);
+        for (const [wk, abandonnes] of Object.entries(checkoutWeeks)) {
+          if (!existingData.weeks[bid][wk]) existingData.weeks[bid][wk] = {};
+          const cmds = existingData.weeks[bid][wk].commandes || 0;
+          const ajouts = cmds + abandonnes;
+          existingData.weeks[bid][wk].ajouts_panier   = ajouts;
+          existingData.weeks[bid][wk].taux_conversion = ajouts > 0 ? Math.round((cmds / ajouts) * 1000) / 10 : 0;
+        }
+        ok(`Checkouts: ${Object.keys(checkoutWeeks).length} semaines`);
+      } catch (e) { fail(`Checkouts full sync: ${e.message}`); }
     }
 
     // ── Klaviyo full sync ──
