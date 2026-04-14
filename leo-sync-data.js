@@ -1,6 +1,6 @@
 // Léo Finance OS — Sync Data (auto-généré, ne pas modifier)
-// Dernière sync: 2026-04-13T07:27:58.713Z
-// Semaines synchronisées: 32
+// Dernière sync: 2026-04-14T06:20:29.494Z
+// Semaines synchronisées: 35
 window.__SYNC_DATA__ = {
   "weeks": {
     "emma": {
@@ -257,6 +257,15 @@ window.__SYNC_DATA__ = {
         "nouveaux_clients": 2,
         "clients_recurrents": 0,
         "ajouts_panier": 2
+      },
+      "2026-W16": {
+        "ca": 0,
+        "retours": 0,
+        "ca_email": 0,
+        "commandes": 0,
+        "nouveaux_clients": 0,
+        "clients_recurrents": 0,
+        "ajouts_panier": 0
       }
     },
     "aitavia": {
@@ -279,6 +288,15 @@ window.__SYNC_DATA__ = {
         "nouveaux_clients": 2,
         "clients_recurrents": 0,
         "ajouts_panier": 3
+      },
+      "2026-W16": {
+        "ca": 0,
+        "retours": 0,
+        "ca_email": 0,
+        "commandes": 0,
+        "nouveaux_clients": 0,
+        "clients_recurrents": 0,
+        "ajouts_panier": 0
       }
     },
     "kimoko": {
@@ -362,6 +380,15 @@ window.__SYNC_DATA__ = {
         "nouveaux_clients": 1,
         "clients_recurrents": 0,
         "ajouts_panier": 4
+      },
+      "2026-W16": {
+        "ca": 64.9,
+        "retours": 0,
+        "ca_email": 0,
+        "commandes": 1,
+        "nouveaux_clients": 1,
+        "clients_recurrents": 0,
+        "ajouts_panier": 1
       }
     }
   },
@@ -373,9 +400,10 @@ window.__SYNC_DATA__ = {
     "2026-04-09",
     "2026-04-10",
     "2026-04-11",
-    "2026-04-12"
+    "2026-04-12",
+    "2026-04-13"
   ],
-  "last_sync": "2026-04-13T07:27:58.713Z",
+  "last_sync": "2026-04-14T06:20:29.494Z",
   "synced_fields": [
     "ca",
     "retours",
