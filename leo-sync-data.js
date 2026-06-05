@@ -1,5 +1,5 @@
 // Léo Finance OS — Sync Data (auto-généré, ne pas modifier)
-// Dernière sync: 2026-06-04T04:22:21.747Z
+// Dernière sync: 2026-06-05T04:06:01.881Z
 // Semaines synchronisées: 56
 window.__SYNC_DATA__ = {
   "weeks": {
@@ -416,13 +416,13 @@ window.__SYNC_DATA__ = {
         "ajouts_panier": 3
       },
       "2026-W23": {
-        "ca": 0,
+        "ca": 32.81,
         "retours": 0,
         "ca_email": 0,
-        "commandes": 0,
-        "nouveaux_clients": 0,
+        "commandes": 1,
+        "nouveaux_clients": 1,
         "clients_recurrents": 0,
-        "ajouts_panier": 0
+        "ajouts_panier": 2
       }
     },
     "kimoko": {
@@ -571,13 +571,13 @@ window.__SYNC_DATA__ = {
         "ajouts_panier": 12
       },
       "2026-W23": {
-        "ca": 173.71,
+        "ca": 984.15,
         "retours": 0,
-        "ca_email": 0,
-        "commandes": 3,
-        "nouveaux_clients": 3,
+        "ca_email": 649.49,
+        "commandes": 5,
+        "nouveaux_clients": 5,
         "clients_recurrents": 0,
-        "ajouts_panier": 4
+        "ajouts_panier": 6
       }
     }
   },
@@ -641,9 +641,10 @@ window.__SYNC_DATA__ = {
     "2026-05-31",
     "2026-06-01",
     "2026-06-02",
-    "2026-06-03"
+    "2026-06-03",
+    "2026-06-04"
   ],
-  "last_sync": "2026-06-04T04:22:21.747Z",
+  "last_sync": "2026-06-05T04:06:01.881Z",
   "synced_fields": [
     "ca",
     "retours",
