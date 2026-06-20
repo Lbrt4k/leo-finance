@@ -1,5 +1,5 @@
 // Léo Finance OS — Sync Data (auto-généré, ne pas modifier)
-// Dernière sync: 2026-06-19T04:46:15.246Z
+// Dernière sync: 2026-06-20T04:00:32.997Z
 // Semaines synchronisées: 62
 window.__SYNC_DATA__ = {
   "weeks": {
@@ -452,13 +452,13 @@ window.__SYNC_DATA__ = {
         "ajouts_panier": 7
       },
       "2026-W25": {
-        "ca": 148.72,
+        "ca": 225.53,
         "retours": 0,
         "ca_email": 0,
-        "commandes": 3,
-        "nouveaux_clients": 3,
+        "commandes": 5,
+        "nouveaux_clients": 5,
         "clients_recurrents": 0,
-        "ajouts_panier": 5
+        "ajouts_panier": 7
       }
     },
     "kimoko": {
@@ -710,9 +710,10 @@ window.__SYNC_DATA__ = {
     "2026-06-15",
     "2026-06-16",
     "2026-06-17",
-    "2026-06-18"
+    "2026-06-18",
+    "2026-06-19"
   ],
-  "last_sync": "2026-06-19T04:46:15.246Z",
+  "last_sync": "2026-06-20T04:00:32.997Z",
   "synced_fields": [
     "ca",
     "retours",
