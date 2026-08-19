@@ -1,5 +1,5 @@
 // Léo Finance OS — Sync Data (auto-généré, ne pas modifier)
-// Dernière sync: 2026-08-18T01:21:38.107Z
+// Dernière sync: 2026-08-19T01:23:21.992Z
 // Semaines synchronisées: 89
 window.__SYNC_DATA__ = {
   "weeks": {
@@ -427,7 +427,7 @@ window.__SYNC_DATA__ = {
         "commandes": 0,
         "nouveaux_clients": 0,
         "clients_recurrents": 0,
-        "ajouts_panier": 0
+        "ajouts_panier": 1
       }
     },
     "aitavia": {
@@ -977,9 +977,10 @@ window.__SYNC_DATA__ = {
     "2026-08-14",
     "2026-08-15",
     "2026-08-16",
-    "2026-08-17"
+    "2026-08-17",
+    "2026-08-18"
   ],
-  "last_sync": "2026-08-18T01:21:38.107Z",
+  "last_sync": "2026-08-19T01:23:21.992Z",
   "synced_fields": [
     "ca",
     "retours",
