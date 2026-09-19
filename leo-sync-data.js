@@ -1,5 +1,5 @@
 // Léo Finance OS — Sync Data (auto-généré, ne pas modifier)
-// Dernière sync: 2026-09-18T03:52:21.621Z
+// Dernière sync: 2026-09-19T03:49:07.444Z
 // Semaines synchronisées: 101
 window.__SYNC_DATA__ = {
   "weeks": {
@@ -1092,9 +1092,10 @@ window.__SYNC_DATA__ = {
     "2026-09-14",
     "2026-09-15",
     "2026-09-16",
-    "2026-09-17"
+    "2026-09-17",
+    "2026-09-18"
   ],
-  "last_sync": "2026-09-18T03:52:21.621Z",
+  "last_sync": "2026-09-19T03:49:07.444Z",
   "synced_fields": [
     "ca",
     "retours",
